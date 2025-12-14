@@ -35,7 +35,7 @@ def publish_message(content, owner):
         channel.queue_declare(queue='task_queue', durable=True)
         
         message = json.dumps({'content': content, 'owner': owner})
-        
+        #send data to a queue
         channel.basic_publish(
             exchange='',
             routing_key='task_queue',
@@ -50,15 +50,38 @@ def publish_message(content, owner):
         return False
 
 class MyHandler(http.server.SimpleHTTPRequestHandler):
+    def get_template_path(self, filename):
+        # 1. Container path
+        if os.path.exists(f"/app/{filename}"):
+            return f"/app/{filename}"
+        # 2. Local path (same dir)
+        local_path = os.path.join(os.path.dirname(__file__), filename)
+        if os.path.exists(local_path):
+            return local_path
+        # 3. Local path (html subdir)
+        html_subdir_path = os.path.join(os.path.dirname(__file__), "html", filename)
+        if os.path.exists(html_subdir_path):
+            return html_subdir_path
+        # 4. Fallback to just filename
+        return filename
+
     def do_GET(self):
         parsed_path = urllib.parse.urlparse(self.path)
         query_params = urllib.parse.parse_qs(parsed_path.query)
 
         if parsed_path.path == '/':
             self.send_response(200)
+            self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write(b"Backend is Running (Microservices Mode)")
             
+            try:
+                landing_path = self.get_template_path("landing.html")
+                with open(landing_path, "r") as f:
+                    self.wfile.write(f.read().encode())
+            except Exception as e:
+                self.wfile.write(f"Error loading landing page: {e}".encode())
+
+        #to view the data from the database     
         elif parsed_path.path == '/view':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -98,6 +121,28 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             html += "</table></body></html>"
             self.wfile.write(html.encode())
 
+        elif parsed_path.path == '/home':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            
+            try:
+                # Render index.html (Default) without saving
+                template_path = self.get_template_path("index.html")
+                with open(template_path, "r") as template_file:
+                    html_content = template_file.read()
+                
+                # Replace placeholders with default/display values
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                owner_name = os.environ.get('OWNER_NAME', 'Guest')
+                
+                response_content = html_content.replace("{{DATA}}", "Welcome Home") \
+                                               .replace("{{TIMESTAMP}}", timestamp) \
+                                               .replace("{{OWNER}}", owner_name)
+                self.wfile.write(response_content.encode())
+            except Exception as e:
+                self.wfile.write(f"Error loading home page: {e}".encode())
+
         elif parsed_path.path == '/save':
             data_to_save = query_params.get('data', ['Default Data'])[0]
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -113,15 +158,17 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             # Determine which template to load
             template_param = query_params.get('template', ['default'])[0]
             if template_param == 'space':
-                template_path = "/app/space.html"
+                template_file_name = "space.html"
             elif template_param == 'webgl':
-                template_path = "/app/webgl.html"
+                template_file_name = "webgl.html"
             elif template_param == 'architecture':
-                template_path = "/app/architecture.html"
+                template_file_name = "architecture.html"
             else:
-                template_path = "/app/index.html"
+                template_file_name = "index.html"
 
             try:
+                template_path = self.get_template_path(template_file_name)
+                
                 with open(template_path, "r") as template_file:
                     html_content = template_file.read()
                 

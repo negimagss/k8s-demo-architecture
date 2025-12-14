@@ -23,6 +23,7 @@ kubectl create configmap backend-script \
     --from-file=space.html=code/html/space.html \
     --from-file=webgl.html=code/html/webgl.html \
     --from-file=architecture.html=code/html/architecture.html \
+    --from-file=landing.html=code/landing.html \
     -n local-test \
     --dry-run=client -o yaml > deployment/04-backend-configmap.yaml
 

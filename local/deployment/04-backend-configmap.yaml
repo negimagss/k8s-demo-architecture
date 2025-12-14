@@ -11,16 +11,27 @@ data:
     publish_message(content, owner):\n    try:\n        connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))\n
     \       channel = connection.channel()\n        channel.queue_declare(queue='task_queue',
     durable=True)\n        \n        message = json.dumps({'content': content, 'owner':
-    owner})\n        \n        channel.basic_publish(\n            exchange='',\n
+    owner})\n        #send data to a queue\n        channel.basic_publish(\n            exchange='',\n
     \           routing_key='task_queue',\n            body=message,\n            properties=pika.BasicProperties(\n
     \               delivery_mode=2,  # make message persistent\n            ))\n
     \       connection.close()\n        return True\n    except Exception as e:\n
     \       print(f\"Failed to publish: {e}\")\n        return False\n\nclass MyHandler(http.server.SimpleHTTPRequestHandler):\n
+    \   def get_template_path(self, filename):\n        # 1. Container path\n        if
+    os.path.exists(f\"/app/{filename}\"):\n            return f\"/app/{filename}\"\n
+    \       # 2. Local path (same dir)\n        local_path = os.path.join(os.path.dirname(__file__),
+    filename)\n        if os.path.exists(local_path):\n            return local_path\n
+    \       # 3. Local path (html subdir)\n        html_subdir_path = os.path.join(os.path.dirname(__file__),
+    \"html\", filename)\n        if os.path.exists(html_subdir_path):\n            return
+    html_subdir_path\n        # 4. Fallback to just filename\n        return filename\n\n
     \   def do_GET(self):\n        parsed_path = urllib.parse.urlparse(self.path)\n
     \       query_params = urllib.parse.parse_qs(parsed_path.query)\n\n        if
-    parsed_path.path == '/':\n            self.send_response(200)\n            self.end_headers()\n
-    \           self.wfile.write(b\"Backend is Running (Microservices Mode)\")\n            \n
-    \       elif parsed_path.path == '/view':\n            self.send_response(200)\n
+    parsed_path.path == '/':\n            self.send_response(200)\n            self.send_header('Content-type',
+    'text/html')\n            self.end_headers()\n            \n            try:\n
+    \               landing_path = self.get_template_path(\"landing.html\")\n                with
+    open(landing_path, \"r\") as f:\n                    self.wfile.write(f.read().encode())\n
+    \           except Exception as e:\n                self.wfile.write(f\"Error
+    loading landing page: {e}\".encode())\n\n        #to view the data from the database
+    \    \n        elif parsed_path.path == '/view':\n            self.send_response(200)\n
     \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
     \           \n            conn = get_db_connection()\n            rows = []\n
     \           if conn:\n                with conn.cursor() as cur:\n                    #
@@ -38,21 +49,34 @@ data:
     \               <table>\n                    <tr><th>ID</th><th>Content</th><th>Owner</th><th>Timestamp</th></tr>\n
     \           \"\"\"\n            for row in rows:\n                html += f\"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td></tr>\"\n
     \           \n            html += \"</table></body></html>\"\n            self.wfile.write(html.encode())\n\n
-    \       elif parsed_path.path == '/save':\n            data_to_save = query_params.get('data',
-    ['Default Data'])[0]\n            timestamp = datetime.now().strftime(\"%Y-%m-%d
+    \       elif parsed_path.path == '/home':\n            self.send_response(200)\n
+    \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
+    \           \n            try:\n                # Render index.html (Default)
+    without saving\n                template_path = self.get_template_path(\"index.html\")\n
+    \               with open(template_path, \"r\") as template_file:\n                    html_content
+    = template_file.read()\n                \n                # Replace placeholders
+    with default/display values\n                timestamp = datetime.now().strftime(\"%Y-%m-%d
+    %H:%M:%S\")\n                owner_name = os.environ.get('OWNER_NAME', 'Guest')\n
+    \               \n                response_content = html_content.replace(\"{{DATA}}\",
+    \"Welcome Home\") \\\n                                               .replace(\"{{TIMESTAMP}}\",
+    timestamp) \\\n                                               .replace(\"{{OWNER}}\",
+    owner_name)\n                self.wfile.write(response_content.encode())\n            except
+    Exception as e:\n                self.wfile.write(f\"Error loading home page:
+    {e}\".encode())\n\n        elif parsed_path.path == '/save':\n            data_to_save
+    = query_params.get('data', ['Default Data'])[0]\n            timestamp = datetime.now().strftime(\"%Y-%m-%d
     %H:%M:%S\")\n            owner_name = os.environ.get('OWNER_NAME', 'Unknown Owner')\n
     \           \n            # Publish to RabbitMQ\n            success = publish_message(data_to_save,
     owner_name)\n            \n            self.send_response(200)\n            self.send_header('Content-type',
     'text/html')\n            self.end_headers()\n            \n            # Determine
     which template to load\n            template_param = query_params.get('template',
-    ['default'])[0]\n            if template_param == 'space':\n                template_path
-    = \"/app/space.html\"\n            elif template_param == 'webgl':\n                template_path
-    = \"/app/webgl.html\"\n            elif template_param == 'architecture':\n                template_path
-    = \"/app/architecture.html\"\n            else:\n                template_path
-    = \"/app/index.html\"\n\n            try:\n                with open(template_path,
-    \"r\") as template_file:\n                    html_content = template_file.read()\n
-    \               \n                response_content = html_content.replace(\"{{DATA}}\",
-    data_to_save) \\\n                                               .replace(\"{{TIMESTAMP}}\",
+    ['default'])[0]\n            if template_param == 'space':\n                template_file_name
+    = \"space.html\"\n            elif template_param == 'webgl':\n                template_file_name
+    = \"webgl.html\"\n            elif template_param == 'architecture':\n                template_file_name
+    = \"architecture.html\"\n            else:\n                template_file_name
+    = \"index.html\"\n\n            try:\n                template_path = self.get_template_path(template_file_name)\n
+    \               \n                with open(template_path, \"r\") as template_file:\n
+    \                   html_content = template_file.read()\n                \n                response_content
+    = html_content.replace(\"{{DATA}}\", data_to_save) \\\n                                               .replace(\"{{TIMESTAMP}}\",
     timestamp) \\\n                                               .replace(\"{{OWNER}}\",
     owner_name)\n            except Exception as e:\n                response_content
     = f\"Error loading template: {e}\"\n\n            self.wfile.write(response_content.encode())\n
@@ -169,19 +193,20 @@ data:
     DB</div>\n        </div>\n\n    </div>\n\n    <div class=\"controls\">\n        <button
     onclick=\"triggerFlow()\">Simulate Save Request</button>\n    </div>\n\n    <div
     class=\"log-console\" id=\"console\">\n        <div class=\"log-entry\"><span>SYSTEM</span>
-    Ready.</div>\n    </div>\n\n    <footer>\n        <a href=\"/save?data=FromArchitecture&template=default\">Default</a>\n
-    \       <a href=\"/save?data=FromArchitecture&template=space\">Space</a>\n        <a
-    href=\"/save?data=FromArchitecture&template=webgl\">WebGL</a>\n        <a href=\"/save?data=FromArchitecture&template=architecture\"
-    style=\"color: var(--accent)\">Architecture</a>\n    </footer>\n\n    <script>\n
-    \       function log(msg) {\n            const consoleDiv = document.getElementById('console');\n
-    \           const entry = document.createElement('div');\n            entry.className
-    = 'log-entry';\n            const time = new Date().toLocaleTimeString();\n            entry.innerHTML
-    = `<span>${time}</span> ${msg}`;\n            consoleDiv.insertBefore(entry, consoleDiv.firstChild);\n
-    \       }\n\n        function animatePacket(id, delay) {\n            const packet
-    = document.getElementById(id);\n            setTimeout(() => {\n                packet.style.animation
-    = 'none';\n                packet.offsetHeight; /* trigger reflow */\n                packet.style.animation
-    = 'flow1 1s linear forwards';\n            }, delay);\n        }\n\n        function
-    triggerFlow() {\n            log(\"Browser sending request...\");\n            animatePacket('p1',
+    Ready.</div>\n    </div>\n\n    <footer>\n        <a href=\"/\">Home</a>\n        <a
+    href=\"/save?data=FromArchitecture&template=default\">Design</a>\n        <a href=\"/save?data=FromArchitecture&template=space\">Space</a>\n
+    \       <a href=\"/save?data=FromArchitecture&template=webgl\">WebGL</a>\n        <a
+    href=\"/save?data=FromArchitecture&template=architecture\" style=\"color: var(--accent)\">Architecture</a>\n
+    \   </footer>\n\n    <script>\n        function log(msg) {\n            const
+    consoleDiv = document.getElementById('console');\n            const entry = document.createElement('div');\n
+    \           entry.className = 'log-entry';\n            const time = new Date().toLocaleTimeString();\n
+    \           entry.innerHTML = `<span>${time}</span> ${msg}`;\n            consoleDiv.insertBefore(entry,
+    consoleDiv.firstChild);\n        }\n\n        function animatePacket(id, delay)
+    {\n            const packet = document.getElementById(id);\n            setTimeout(()
+    => {\n                packet.style.animation = 'none';\n                packet.offsetHeight;
+    /* trigger reflow */\n                packet.style.animation = 'flow1 1s linear
+    forwards';\n            }, delay);\n        }\n\n        function triggerFlow()
+    {\n            log(\"Browser sending request...\");\n            animatePacket('p1',
     0);\n\n            setTimeout(() => log(\"Nginx received request, proxying to
     Backend...\"), 1000);\n            animatePacket('p2', 1000);\n\n            setTimeout(()
     => log(\"Backend API processing. Publishing to RabbitMQ...\"), 2000);\n            animatePacket('p3',
@@ -615,7 +640,8 @@ data:
             <footer>
                 <div style="margin-bottom: 20px;">
                     View as:
-                    <a href="/save?data={{DATA}}&template=default" style="color: #fff; margin-right: 10px;">Default</a>
+                    <a href="/" style="color: #fff; margin-right: 10px; font-weight: bold;">Home</a>
+                    <a href="/save?data={{DATA}}&template=default" style="color: #fff; margin-right: 10px;">Design</a>
                     <a href="/save?data={{DATA}}&template=space" style="color: #fff; margin-right: 10px;">Space</a>
                     <a href="/save?data={{DATA}}&template=webgl" style="color: #fff; margin-right: 10px;">WebGL</a>
                     <a href="/save?data={{DATA}}&template=architecture" style="color: #00ff9d;">Architecture</a>
@@ -628,6 +654,399 @@ data:
                     Owned by: <b>{{OWNER}}</b>
                 </div>
             </footer>
+        </main>
+
+    </body>
+
+    </html>
+  landing.html: |-
+    <!DOCTYPE html>
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>K8s Lab - Landing</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap"
+            rel="stylesheet">
+
+        <style>
+            :root {
+                --color-dark: #050505;
+                --color-light: #ffffff;
+                --font-sans: 'Inter', sans-serif;
+                --font-mono: 'Space Mono', monospace;
+            }
+
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                min-height: 100vh;
+                background-color: var(--color-dark);
+                color: var(--color-light);
+                font-family: var(--font-sans);
+                overflow-x: hidden;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+            }
+
+            /* --- THE CRAZY BACKGROUND --- */
+            .ambient-background {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -2;
+                overflow: hidden;
+                background: #000;
+            }
+
+            .orb {
+                position: absolute;
+                border-radius: 50%;
+                filter: blur(100px);
+                opacity: 0.7;
+                animation: moveOrb infinite alternate ease-in-out;
+            }
+
+            /* Intense, clashing color palette */
+            .orb-1 {
+                top: -20%;
+                left: -20%;
+                width: 60vw;
+                height: 60vw;
+                background: radial-gradient(circle, #ff0f7b, #ff5500);
+                animation-duration: 18s;
+            }
+
+            .orb-2 {
+                bottom: -30%;
+                right: -20%;
+                width: 70vw;
+                height: 70vw;
+                background: radial-gradient(circle, #00c6ff, #0072ff);
+                animation-duration: 25s;
+                animation-delay: -5s;
+            }
+
+            .orb-3 {
+                top: 40%;
+                left: 30%;
+                width: 50vw;
+                height: 50vw;
+                background: radial-gradient(circle, #39ff14, #aaff00);
+                animation-duration: 22s;
+                animation-delay: -10s;
+            }
+
+            .orb-4 {
+                top: 10%;
+                right: 10%;
+                width: 40vw;
+                height: 40vw;
+                background: radial-gradient(circle, #8A2387, #E94057, #F27121);
+                animation-duration: 30s;
+            }
+
+            @keyframes moveOrb {
+                0% {
+                    transform: translate(0, 0) rotate(0deg) scale(1);
+                }
+
+                50% {
+                    transform: translate(15%, 10%) rotate(180deg) scale(1.1);
+                }
+
+                100% {
+                    transform: translate(-10%, -15%) rotate(360deg) scale(0.9);
+                }
+            }
+
+            /* Cinematic Grain Overlay */
+            .noise-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -1;
+                opacity: 0.06;
+                pointer-events: none;
+                background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            }
+
+            /* --- MAIN GLASS CONTAINER --- */
+            .main-glass-panel {
+                width: 100%;
+                max-width: 1100px;
+                min-height: 80vh;
+                /* Super frosted glass effect */
+                background: rgba(255, 255, 255, 0.03);
+                backdrop-filter: blur(40px) saturate(1.5);
+                -webkit-backdrop-filter: blur(40px) saturate(1.5);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 30px;
+                padding: 60px;
+                box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                /* Centered content for landing */
+                align-items: center;
+                /* Entrance animation for container */
+                opacity: 0;
+                transform: translateY(30px);
+                animation: fadeSlideUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            }
+
+            /* Header */
+            header {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-bottom: 60px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                text-align: center;
+            }
+
+            .brand {
+                font-weight: 900;
+                font-size: 24px;
+                margin-bottom: 10px;
+            }
+
+            .badge {
+                background: var(--color-light);
+                color: var(--color-dark);
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: 800;
+                font-size: 12px;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            /* Pulsing success dot */
+            .badge::before {
+                content: '';
+                display: block;
+                width: 8px;
+                height: 8px;
+                background: #00ff44;
+                border-radius: 50%;
+                box-shadow: 0 0 10px #00ff44;
+                animation: pulse 2s infinite;
+            }
+
+            /* Hero Typography */
+            h1 {
+                font-size: clamp(40px, 6vw, 70px);
+                font-weight: 900;
+                line-height: 1;
+                letter-spacing: -2px;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+
+            /* Animated Gradient Text */
+            .highlight-kinetic {
+                display: block;
+                background: linear-gradient(45deg, #ff00cc, #3333ff, #00ffcc, #ffcc00);
+                background-size: 300% 300%;
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation: gradientShift 5s ease infinite;
+            }
+
+            .subtitle {
+                font-size: 18px;
+                line-height: 1.5;
+                opacity: 0.8;
+                max-width: 600px;
+                text-align: center;
+                font-family: var(--font-mono);
+                margin-bottom: 50px;
+            }
+
+            /* Navigation Grid */
+            .nav-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                width: 100%;
+                max-width: 900px;
+            }
+
+            .nav-btn {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 30px;
+                border-radius: 16px;
+                text-decoration: none;
+                color: white;
+                font-family: var(--font-mono);
+                font-weight: 700;
+                font-size: 18px;
+                text-transform: uppercase;
+                text-align: center;
+                transition: all 0.3s ease;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 150px;
+            }
+
+            .nav-btn:hover {
+                background: rgba(255, 255, 255, 0.15);
+                transform: translateY(-5px);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+                border-color: rgba(255, 255, 255, 0.4);
+            }
+
+            .nav-btn span {
+                font-size: 12px;
+                opacity: 0.6;
+                margin-top: 10px;
+                font-weight: 400;
+            }
+
+            .btn-default:hover {
+                border-color: #ff0f7b;
+                box-shadow: 0 0 20px rgba(255, 15, 123, 0.3);
+            }
+
+            .btn-space:hover {
+                border-color: #00c6ff;
+                box-shadow: 0 0 20px rgba(0, 198, 255, 0.3);
+            }
+
+            .btn-webgl:hover {
+                border-color: #E94057;
+                box-shadow: 0 0 20px rgba(233, 64, 87, 0.3);
+            }
+
+            .btn-arch:hover {
+                border-color: #00ff9d;
+                box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
+            }
+
+            /* Animations */
+            @keyframes gradientShift {
+                0% {
+                    background-position: 0% 50%;
+                }
+
+                50% {
+                    background-position: 100% 50%;
+                }
+
+                100% {
+                    background-position: 0% 50%;
+                }
+            }
+
+            @keyframes pulse {
+                0% {
+                    opacity: 0.5;
+                    box-shadow: 0 0 0px #00ff44;
+                }
+
+                50% {
+                    opacity: 1;
+                    box-shadow: 0 0 15px #00ff44;
+                }
+
+                100% {
+                    opacity: 0.5;
+                    box-shadow: 0 0 0px #00ff44;
+                }
+            }
+
+            @keyframes fadeSlideUp {
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            /* Staggered entry */
+            header {
+                animation: fadeSlideUp 0.8s ease-out 0.3s forwards;
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            h1,
+            .subtitle {
+                animation: fadeSlideUp 0.8s ease-out 0.5s forwards;
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            .nav-grid {
+                animation: fadeSlideUp 0.8s ease-out 0.7s forwards;
+                opacity: 0;
+                transform: translateY(20px);
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <div class="ambient-background">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+            <div class="orb orb-4"></div>
+            <div class="noise-overlay"></div>
+        </div>
+
+        <main class="main-glass-panel">
+            <header>
+                <div class="brand">K8s Lab</div>
+                <div class="badge">Gateway · Active</div>
+            </header>
+
+            <h1>
+                Welcome to <br />
+                <span class="highlight-kinetic">The Experiment</span>
+            </h1>
+            <p class="subtitle">
+                Explore the different visualization modules and data persistence layers available in this environment.
+            </p>
+
+            <div class="nav-grid">
+                <a href="/save?template=default" class="nav-btn btn-default">
+                    Design View
+                    <span>Standard Data Entry</span>
+                </a>
+                <a href="/save?template=space" class="nav-btn btn-space">
+                    Space View
+                    <span>Cosmic Visualization</span>
+                </a>
+                <a href="/save?template=webgl" class="nav-btn btn-webgl">
+                    WebGL View
+                    <span>3D Graphics Test</span>
+                </a>
+                <a href="/save?template=architecture" class="nav-btn btn-arch">
+                    Architecture
+                    <span>System Diagrams</span>
+                </a>
+            </div>
         </main>
 
     </body>
@@ -770,6 +1189,7 @@ data:
             </div>
 
             <div class="meta">
+                <span><a href="/" style="color: #aaa; text-decoration: none;">HOME</a></span>
                 <span>Owner: {{OWNER}}</span>
                 <span><a href="/save?data={{DATA}}&template=architecture" style="color: #aaa; text-decoration: none;">VIEW
                         ARCHITECTURE</a></span>
@@ -1036,7 +1456,10 @@ data:
         </main>
 
         <footer>
-            <div>Python Backend · Owned by {{OWNER}}</div>
+            <div>
+                <a href="/" style="color: rgba(255,255,255,0.8); margin-right: 20px; text-decoration: none;">HOME</a>
+                Python Backend · Owned by {{OWNER}}
+            </div>
             <div><a href="/save?data={{DATA}}&template=architecture"
                     style="color: rgba(255,255,255,0.8); margin-right: 20px;">ARCHITECTURE</a> {{TIMESTAMP}}</div>
         </footer>

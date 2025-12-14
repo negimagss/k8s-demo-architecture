@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Backend Service Status</title>
+    <title>K8s Lab - Landing</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -139,7 +139,9 @@
             box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
+            /* Centered content for landing */
+            align-items: center;
             /* Entrance animation for container */
             opacity: 0;
             transform: translateY(30px);
@@ -149,16 +151,18 @@
         /* Header */
         header {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
-            margin-bottom: 80px;
+            margin-bottom: 60px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            text-align: center;
         }
 
         .brand {
             font-weight: 900;
-            font-size: 20px;
+            font-size: 24px;
+            margin-bottom: 10px;
         }
 
         .badge {
@@ -168,7 +172,7 @@
             border-radius: 4px;
             font-weight: 800;
             font-size: 12px;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
         }
@@ -185,28 +189,14 @@
             animation: pulse 2s infinite;
         }
 
-        /* Content Grid */
-        .content-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 60px;
-            align-items: center;
-        }
-
-        @media (min-width: 900px) {
-            .content-grid {
-                grid-template-columns: 1.2fr 1fr;
-            }
-        }
-
         /* Hero Typography */
         h1 {
-            font-size: clamp(40px, 8vw, 80px);
-            /* Responsive massive font */
+            font-size: clamp(40px, 6vw, 70px);
             font-weight: 900;
-            line-height: 0.9;
+            line-height: 1;
             letter-spacing: -2px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            text-align: center;
         }
 
         /* Animated Gradient Text */
@@ -220,77 +210,76 @@
         }
 
         .subtitle {
-            font-size: 20px;
+            font-size: 18px;
             line-height: 1.5;
             opacity: 0.8;
-            max-width: 500px;
+            max-width: 600px;
+            text-align: center;
             font-family: var(--font-mono);
+            margin-bottom: 50px;
         }
 
-        /* Data Card - The Tech Piece */
-        .data-card {
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(100, 100, 255, 0.3);
-            border-radius: 20px;
-            padding: 30px;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-        }
-
-        /* Scanning line animation over data card */
-        .data-card::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
+        /* Navigation Grid */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
             width: 100%;
-            height: 5px;
-            background: linear-gradient(90deg, transparent, rgba(0, 255, 200, 0.8), transparent);
-            animation: scanline 3s linear infinite;
+            max-width: 900px;
         }
 
-        .card-title {
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 16px;
+            text-decoration: none;
+            color: white;
             font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 18px;
             text-transform: uppercase;
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 150px;
         }
 
-        .card-title span.status-blink {
-            color: #00ffcc;
-            animation: blink 1s infinite;
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.4);
         }
 
-        .data-payload {
-            font-family: var(--font-mono);
-            font-size: 16px;
-            color: #00ffcc;
-            word-break: break-all;
-            max-height: 300px;
-            overflow-y: auto;
-            text-shadow: 0 0 5px rgba(0, 255, 204, 0.5);
-
-        }
-
-        /* Footer */
-        footer {
-            margin-top: auto;
-            padding-top: 60px;
-            border-top: 2px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: space-between;
-            font-family: var(--font-mono);
+        .nav-btn span {
             font-size: 12px;
-            opacity: 0.7;
-            text-transform: uppercase;
+            opacity: 0.6;
+            margin-top: 10px;
+            font-weight: 400;
         }
 
-        footer b {
-            color: var(--color-light);
+        .btn-default:hover {
+            border-color: #ff0f7b;
+            box-shadow: 0 0 20px rgba(255, 15, 123, 0.3);
+        }
+
+        .btn-space:hover {
+            border-color: #00c6ff;
+            box-shadow: 0 0 20px rgba(0, 198, 255, 0.3);
+        }
+
+        .btn-webgl:hover {
+            border-color: #E94057;
+            box-shadow: 0 0 20px rgba(233, 64, 87, 0.3);
+        }
+
+        .btn-arch:hover {
+            border-color: #00ff9d;
+            box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
         }
 
         /* Animations */
@@ -325,22 +314,6 @@
             }
         }
 
-        @keyframes scanline {
-            0% {
-                top: -10%;
-            }
-
-            100% {
-                top: 110%;
-            }
-        }
-
-        @keyframes blink {
-            50% {
-                opacity: 0;
-            }
-        }
-
         @keyframes fadeSlideUp {
             to {
                 opacity: 1;
@@ -348,27 +321,22 @@
             }
         }
 
-        /* Staggered entrance for content elements */
+        /* Staggered entry */
         header {
             animation: fadeSlideUp 0.8s ease-out 0.3s forwards;
             opacity: 0;
             transform: translateY(20px);
         }
 
-        .hero-text {
+        h1,
+        .subtitle {
             animation: fadeSlideUp 0.8s ease-out 0.5s forwards;
             opacity: 0;
             transform: translateY(20px);
         }
 
-        .data-card-container {
+        .nav-grid {
             animation: fadeSlideUp 0.8s ease-out 0.7s forwards;
-            opacity: 0;
-            transform: translateY(20px);
-        }
-
-        footer {
-            animation: fadeSlideUp 0.8s ease-out 0.9s forwards;
             opacity: 0;
             transform: translateY(20px);
         }
@@ -387,54 +355,36 @@
 
     <main class="main-glass-panel">
         <header>
-            <div class="brand">Shardul Negi</div>
-            <div class="badge">Backend · Success</div>
+            <div class="brand">K8s Lab</div>
+            <div class="badge">Gateway · Active</div>
         </header>
 
-        <div class="content-grid">
-            <section class="hero-text">
-                <h1>
-                    Your data is <br />
-                    <span class="highlight-kinetic">securely persisted.</span>
-                </h1>
-                <p class="subtitle">
-                    The backend processed your request successfully and committed
-                    the payload to durable storage with full integrity guarantees.
-                </p>
-            </section>
+        <h1>
+            Welcome to <br />
+            <span class="highlight-kinetic">The Experiment</span>
+        </h1>
+        <p class="subtitle">
+            Explore the different visualization modules and data persistence layers available in this environment.
+        </p>
 
-            <section class="data-card-container">
-                <div class="data-card">
-                    <div class="card-title">
-                        Stored Payload
-                        <span class="status-blink">Is Active_</span>
-                    </div>
-                    <div class="data-payload">
-                        > BEGIN_PAYLOAD <br>
-                        {{DATA}}
-                        <br>> END_STREAM
-                    </div>
-                </div>
-            </section>
+        <div class="nav-grid">
+            <a href="/save?template=default" class="nav-btn btn-default">
+                Design View
+                <span>Standard Data Entry</span>
+            </a>
+            <a href="/save?template=space" class="nav-btn btn-space">
+                Space View
+                <span>Cosmic Visualization</span>
+            </a>
+            <a href="/save?template=webgl" class="nav-btn btn-webgl">
+                WebGL View
+                <span>3D Graphics Test</span>
+            </a>
+            <a href="/save?template=architecture" class="nav-btn btn-arch">
+                Architecture
+                <span>System Diagrams</span>
+            </a>
         </div>
-
-        <footer>
-            <div style="margin-bottom: 20px;">
-                View as:
-                <a href="/" style="color: #fff; margin-right: 10px; font-weight: bold;">Home</a>
-                <a href="/save?data={{DATA}}&template=default" style="color: #fff; margin-right: 10px;">Design</a>
-                <a href="/save?data={{DATA}}&template=space" style="color: #fff; margin-right: 10px;">Space</a>
-                <a href="/save?data={{DATA}}&template=webgl" style="color: #fff; margin-right: 10px;">WebGL</a>
-                <a href="/save?data={{DATA}}&template=architecture" style="color: #00ff9d;">Architecture</a>
-            </div>
-            <div>
-                Served by <b>Python Backend</b><br />
-                {{TIMESTAMP}}
-            </div>
-            <div>
-                Owned by: <b>{{OWNER}}</b>
-            </div>
-        </footer>
     </main>
 
 </body>
