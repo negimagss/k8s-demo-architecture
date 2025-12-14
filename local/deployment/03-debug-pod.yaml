@@ -20,8 +20,10 @@ spec:
           image: python:3.9-slim
           command: ["/bin/sh", "-c"]
           args:
-            - pip install pika psycopg2-binary && python -u /app/app.py
+            - pip install pika psycopg2-binary && python -u /app/health_check.py && python -u /app/app.py
           env:
+            - name: APP_NAME
+              value: "Backend-API"
             - name: OWNER_NAME
               valueFrom:
                 secretKeyRef:

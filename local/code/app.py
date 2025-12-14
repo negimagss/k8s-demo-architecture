@@ -89,13 +89,20 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             
             conn = get_db_connection()
             rows = []
+            health_rows = []
             if conn:
                 with conn.cursor() as cur:
-                    # Check if table exists first
+                    # 1. Fetch Messages
                     cur.execute("SELECT to_regclass('public.messages');")
                     if cur.fetchone()[0]:
                         cur.execute("SELECT id, content, owner, timestamp FROM messages ORDER BY id DESC")
                         rows = cur.fetchall()
+                    
+                    # 2. Fetch Health Logs
+                    cur.execute("SELECT to_regclass('public.health');")
+                    if cur.fetchone()[0]:
+                        cur.execute("SELECT id, app_name, status, timestamp FROM health ORDER BY id DESC")
+                        health_rows = cur.fetchall()
                 conn.close()
 
             html = """
@@ -104,20 +111,34 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 <title>Data View</title>
                 <style>
                     body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
-                    table { width: 100%; border-collapse: collapse; background: white; }
+                    table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 40px; }
                     th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
                     th { background: #333; color: white; }
+                    h2 { border-bottom: 2px solid #333; padding-bottom: 10px; margin-top: 40px; }
                 </style>
             </head>
             <body>
-                <h1>Stored Messages (Postgres)</h1>
-                <p><a href="/">Back</a></p>
+                <h1>Database Inspector</h1>
+                <p><a href="/">Back to Home</a></p>
+                
+                <h2>Stored Messages</h2>
                 <table>
                     <tr><th>ID</th><th>Content</th><th>Owner</th><th>Timestamp</th></tr>
             """
             for row in rows:
                 html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td></tr>"
             
+            html += """
+                </table>
+                
+                <h2>Service Health Logs</h2>
+                <table>
+                    <tr><th>ID</th><th>App Name</th><th>Status</th><th>Timestamp</th></tr>
+            """
+            for row in health_rows:
+                status_color = "green" if row[2] == "Healthy" else "orange"
+                html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td style='color:{status_color}; font-weight:bold;'>{row[2]}</td><td>{row[3]}</td></tr>"
+
             html += "</table></body></html>"
             self.wfile.write(html.encode())
 

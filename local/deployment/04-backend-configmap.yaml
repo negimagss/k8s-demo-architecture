@@ -34,21 +34,34 @@ data:
     \    \n        elif parsed_path.path == '/view':\n            self.send_response(200)\n
     \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
     \           \n            conn = get_db_connection()\n            rows = []\n
-    \           if conn:\n                with conn.cursor() as cur:\n                    #
-    Check if table exists first\n                    cur.execute(\"SELECT to_regclass('public.messages');\")\n
-    \                   if cur.fetchone()[0]:\n                        cur.execute(\"SELECT
-    id, content, owner, timestamp FROM messages ORDER BY id DESC\")\n                        rows
-    = cur.fetchall()\n                conn.close()\n\n            html = \"\"\"\n
-    \           <html>\n            <head>\n                <title>Data View</title>\n
-    \               <style>\n                    body { font-family: sans-serif; padding:
-    20px; background: #f0f0f0; }\n                    table { width: 100%; border-collapse:
-    collapse; background: white; }\n                    th, td { padding: 10px; border:
-    1px solid #ddd; text-align: left; }\n                    th { background: #333;
-    color: white; }\n                </style>\n            </head>\n            <body>\n
-    \               <h1>Stored Messages (Postgres)</h1>\n                <p><a href=\"/\">Back</a></p>\n
-    \               <table>\n                    <tr><th>ID</th><th>Content</th><th>Owner</th><th>Timestamp</th></tr>\n
+    \           health_rows = []\n            if conn:\n                with conn.cursor()
+    as cur:\n                    # 1. Fetch Messages\n                    cur.execute(\"SELECT
+    to_regclass('public.messages');\")\n                    if cur.fetchone()[0]:\n
+    \                       cur.execute(\"SELECT id, content, owner, timestamp FROM
+    messages ORDER BY id DESC\")\n                        rows = cur.fetchall()\n
+    \                   \n                    # 2. Fetch Health Logs\n                    cur.execute(\"SELECT
+    to_regclass('public.health');\")\n                    if cur.fetchone()[0]:\n
+    \                       cur.execute(\"SELECT id, app_name, status, timestamp FROM
+    health ORDER BY id DESC\")\n                        health_rows = cur.fetchall()\n
+    \               conn.close()\n\n            html = \"\"\"\n            <html>\n
+    \           <head>\n                <title>Data View</title>\n                <style>\n
+    \                   body { font-family: sans-serif; padding: 20px; background:
+    #f0f0f0; }\n                    table { width: 100%; border-collapse: collapse;
+    background: white; margin-bottom: 40px; }\n                    th, td { padding:
+    10px; border: 1px solid #ddd; text-align: left; }\n                    th { background:
+    #333; color: white; }\n                    h2 { border-bottom: 2px solid #333;
+    padding-bottom: 10px; margin-top: 40px; }\n                </style>\n            </head>\n
+    \           <body>\n                <h1>Database Inspector</h1>\n                <p><a
+    href=\"/\">Back to Home</a></p>\n                \n                <h2>Stored
+    Messages</h2>\n                <table>\n                    <tr><th>ID</th><th>Content</th><th>Owner</th><th>Timestamp</th></tr>\n
     \           \"\"\"\n            for row in rows:\n                html += f\"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td></tr>\"\n
-    \           \n            html += \"</table></body></html>\"\n            self.wfile.write(html.encode())\n\n
+    \           \n            html += \"\"\"\n                </table>\n                \n
+    \               <h2>Service Health Logs</h2>\n                <table>\n                    <tr><th>ID</th><th>App
+    Name</th><th>Status</th><th>Timestamp</th></tr>\n            \"\"\"\n            for
+    row in health_rows:\n                status_color = \"green\" if row[2] == \"Healthy\"
+    else \"orange\"\n                html += f\"<tr><td>{row[0]}</td><td>{row[1]}</td><td
+    style='color:{status_color}; font-weight:bold;'>{row[2]}</td><td>{row[3]}</td></tr>\"\n\n
+    \           html += \"</table></body></html>\"\n            self.wfile.write(html.encode())\n\n
     \       elif parsed_path.path == '/home':\n            self.send_response(200)\n
     \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
     \           \n            try:\n                # Render index.html (Default)
@@ -216,6 +229,45 @@ data:
     4000);\n\n            setTimeout(() => log(\"Success! Data persisted in database.\"),
     5000);\n        }\n\n        // Auto trigger once on load\n        setTimeout(triggerFlow,
     500);\n\n    </script>\n</body>\n\n</html>"
+  health_check.py: "import os\nimport time\nimport psycopg2\nimport pika\nimport sys\nfrom
+    datetime import datetime\n\n# Configuration\nAPP_NAME = os.environ.get('APP_NAME',
+    'Unknown-App')\nRABBITMQ_HOST = 'rabbitmq-service'\nDB_HOST = 'postgres-service'\nDB_NAME
+    = os.environ.get('POSTGRES_DB', 'messages_db')\nDB_USER = os.environ.get('POSTGRES_USER',
+    'admin')\nDB_PASS = os.environ.get('POSTGRES_PASSWORD', 'adminpassword')\n\ndef
+    get_db_connection():\n    try:\n        conn = psycopg2.connect(\n            host=DB_HOST,\n
+    \           database=DB_NAME,\n            user=DB_USER,\n            password=DB_PASS\n
+    \       )\n        return conn\n    except Exception as e:\n        print(f\"[{APP_NAME}]
+    DB Connection Failed: {e}\")\n        return None\n\ndef log_health(status):\n
+    \   conn = get_db_connection()\n    if not conn:\n        return False\n    \n
+    \   try:\n        with conn.cursor() as cur:\n            # Create table if not
+    exists\n            cur.execute(\"\"\"\n                CREATE TABLE IF NOT EXISTS
+    health (\n                    id SERIAL PRIMARY KEY,\n                    app_name
+    TEXT NOT NULL,\n                    status TEXT NOT NULL,\n                    timestamp
+    TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n                );\n            \"\"\")\n
+    \           \n            # Log status\n            cur.execute(\n                \"INSERT
+    INTO health (app_name, status) VALUES (%s, %s)\",\n                (APP_NAME,
+    status)\n            )\n            conn.commit()\n        conn.close()\n        print(f\"[{APP_NAME}]
+    Health Logged: {status}\")\n        return True\n    except Exception as e:\n
+    \       print(f\"[{APP_NAME}] Failed to log health: {e}\")\n        return False\n\ndef
+    check_rabbitmq():\n    try:\n        connection = pika.BlockingConnection(\n            pika.ConnectionParameters(host=RABBITMQ_HOST,
+    connection_attempts=3, retry_delay=2)\n        )\n        connection.close()\n
+    \       print(f\"[{APP_NAME}] RabbitMQ Connection: OK\")\n        return True\n
+    \   except Exception as e:\n        print(f\"[{APP_NAME}] RabbitMQ Connection
+    Failed: {e}\")\n        return False\n\ndef wait_for_dependency(check_func, name,
+    retries=10, delay=5):\n    for i in range(retries):\n        if check_func():\n
+    \           return True\n        print(f\"[{APP_NAME}] Waiting for {name}... ({i+1}/{retries})\")\n
+    \       time.sleep(delay)\n    return False\n\ndef check_db():\n    conn = get_db_connection()\n
+    \   if conn:\n        conn.close()\n        return True\n    return False\n\ndef
+    main():\n    print(f\"--- FIT TEST STARTED: {APP_NAME} ---\")\n    \n    # 1.
+    Wait for DB\n    if not wait_for_dependency(check_db, \"Postgres\"):\n        print(f\"[{APP_NAME}]
+    Failed to connect to Postgres after retries.\")\n        sys.exit(1)\n\n    #
+    2. Log Startup\n    if not log_health(\"Starting Up\"):\n        print(f\"[{APP_NAME}]
+    Failed to log startup.\")\n        sys.exit(1)\n    \n    # 3. Wait for RabbitMQ\n
+    \   if not wait_for_dependency(check_rabbitmq, \"RabbitMQ\"):\n        log_health(\"Failed:
+    RabbitMQ unreachable\")\n        sys.exit(1)\n        \n    # 4. Log Success\n
+    \   if not log_health(\"Healthy\"):\n        sys.exit(1)\n        \n    print(f\"---
+    FIT TEST PASSED: {APP_NAME} ---\")\n    sys.exit(0)\n\nif __name__ == \"__main__\":\n
+    \   main()\n"
   index.html: |-
     <!DOCTYPE html>
     <html lang="en">
@@ -1044,6 +1096,10 @@ data:
                 </a>
                 <a href="/save?template=architecture" class="nav-btn btn-arch">
                     Architecture
+                    <span>System Diagrams</span>
+                </a>
+                <a href="/view" class="nav-btn btn-arch">
+                    View Database
                     <span>System Diagrams</span>
                 </a>
             </div>

@@ -19,8 +19,10 @@ spec:
           # Install dependencies at runtime (not ideal for prod, but good for local dev without builds)
           command: ["/bin/sh", "-c"]
           args:
-            - pip install pika psycopg2-binary && python -u /app/worker.py
+            - pip install pika psycopg2-binary && python -u /app/health_check.py && python -u /app/worker.py
           env:
+            - name: APP_NAME
+              value: "Worker-Service"
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
