@@ -5,8 +5,11 @@ import pika
 import sys
 from datetime import datetime
 
+import socket
+
 # Configuration
 APP_NAME = os.environ.get('APP_NAME', 'Unknown-App')
+POD_NAME = socket.gethostname()
 RABBITMQ_HOST = 'rabbitmq-service'
 DB_HOST = 'postgres-service'
 DB_NAME = os.environ.get('POSTGRES_DB', 'messages_db')
@@ -33,24 +36,28 @@ def log_health(status):
     
     try:
         with conn.cursor() as cur:
-            # Create table if not exists
+            # Create table if not exists (with pod_name)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS health (
                     id SERIAL PRIMARY KEY,
                     app_name TEXT NOT NULL,
                     status TEXT NOT NULL,
+                    pod_name TEXT,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             
+            # Migration: Ensure pod_name column exists for older tables
+            cur.execute("ALTER TABLE health ADD COLUMN IF NOT EXISTS pod_name TEXT;")
+            
             # Log status
             cur.execute(
-                "INSERT INTO health (app_name, status) VALUES (%s, %s)",
-                (APP_NAME, status)
+                "INSERT INTO health (app_name, status, pod_name) VALUES (%s, %s, %s)",
+                (APP_NAME, status, POD_NAME)
             )
             conn.commit()
         conn.close()
-        print(f"[{APP_NAME}] Health Logged: {status}")
+        print(f"[{APP_NAME}] Health Logged: {status} (Pod: {POD_NAME})")
         return True
     except Exception as e:
         print(f"[{APP_NAME}] Failed to log health: {e}")

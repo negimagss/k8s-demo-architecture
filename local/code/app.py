@@ -70,18 +70,39 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         query_params = urllib.parse.parse_qs(parsed_path.query)
 
         if parsed_path.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            
+            file_path = self.get_template_path("landing.html")
             try:
-                landing_path = self.get_template_path("landing.html")
-                with open(landing_path, "r") as f:
-                    self.wfile.write(f.read().encode())
+                with open(file_path, "r") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(content.encode())
             except Exception as e:
-                self.wfile.write(f"Error loading landing page: {e}".encode())
+                self.send_error(500, f"Error loading landing page: {e}")
 
-        #to view the data from the database     
+        elif parsed_path.path == '/home':
+            # Log the visit!
+            publish_message("Visited Home Page")
+            
+            # Allow clean rendering of home/index with default data
+            file_path = self.get_template_path("index.html")
+            if os.path.exists(file_path):
+                with open(file_path, "r") as f:
+                    content = f.read()
+                
+                # Replace placeholders
+                content = content.replace("{{DATA}}", "Home Page")
+                content = content.replace("{{TIMESTAMP}}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                content = content.replace("{{OWNER}}", os.environ.get('OWNER_NAME', 'Guest'))
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(content.encode())
+            else:
+                self.send_error(404, "Home Template Not Found")
+
         elif parsed_path.path == '/view':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -92,16 +113,22 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             health_rows = []
             if conn:
                 with conn.cursor() as cur:
-                    # 1. Fetch Messages
+                    # 1. Fetch Messages (Limit 10)
                     cur.execute("SELECT to_regclass('public.messages');")
                     if cur.fetchone()[0]:
-                        cur.execute("SELECT id, content, owner, timestamp FROM messages ORDER BY id DESC")
+                        cur.execute("SELECT id, content, owner, timestamp FROM messages ORDER BY id DESC LIMIT 10")
                         rows = cur.fetchall()
                     
-                    # 2. Fetch Health Logs
+                    # 2. Fetch Health Logs (Limit 10)
                     cur.execute("SELECT to_regclass('public.health');")
                     if cur.fetchone()[0]:
-                        cur.execute("SELECT id, app_name, status, timestamp FROM health ORDER BY id DESC")
+                         # Check if column exists
+                        try:
+                            cur.execute("SELECT id, app_name, status, timestamp, pod_name FROM health ORDER BY id DESC LIMIT 10")
+                        except Exception:
+                            conn.rollback()
+                            cur.execute("SELECT id, app_name, status, timestamp, NULL as pod_name FROM health ORDER BY id DESC LIMIT 10")
+                        
                         health_rows = cur.fetchall()
                 conn.close()
 
@@ -133,11 +160,12 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 
                 <h2>Service Health Logs</h2>
                 <table>
-                    <tr><th>ID</th><th>App Name</th><th>Status</th><th>Timestamp</th></tr>
+                    <tr><th>ID</th><th>App Name</th><th>Status</th><th>Pod Name</th><th>Timestamp</th></tr>
             """
             for row in health_rows:
                 status_color = "green" if row[2] == "Healthy" else "orange"
-                html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td style='color:{status_color}; font-weight:bold;'>{row[2]}</td><td>{row[3]}</td></tr>"
+                pod_name = row[4] if row[4] else "N/A"
+                html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td style='color:{status_color}; font-weight:bold;'>{row[2]}</td><td>{pod_name}</td><td>{row[3]}</td></tr>"
 
             html += "</table></body></html>"
             self.wfile.write(html.encode())

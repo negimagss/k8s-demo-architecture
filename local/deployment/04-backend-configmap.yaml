@@ -25,24 +25,38 @@ data:
     html_subdir_path\n        # 4. Fallback to just filename\n        return filename\n\n
     \   def do_GET(self):\n        parsed_path = urllib.parse.urlparse(self.path)\n
     \       query_params = urllib.parse.parse_qs(parsed_path.query)\n\n        if
-    parsed_path.path == '/':\n            self.send_response(200)\n            self.send_header('Content-type',
-    'text/html')\n            self.end_headers()\n            \n            try:\n
-    \               landing_path = self.get_template_path(\"landing.html\")\n                with
-    open(landing_path, \"r\") as f:\n                    self.wfile.write(f.read().encode())\n
-    \           except Exception as e:\n                self.wfile.write(f\"Error
-    loading landing page: {e}\".encode())\n\n        #to view the data from the database
-    \    \n        elif parsed_path.path == '/view':\n            self.send_response(200)\n
+    parsed_path.path == '/':\n            file_path = self.get_template_path(\"landing.html\")\n
+    \           try:\n                with open(file_path, \"r\") as f:\n                    content
+    = f.read()\n                self.send_response(200)\n                self.send_header('Content-type',
+    'text/html')\n                self.end_headers()\n                self.wfile.write(content.encode())\n
+    \           except Exception as e:\n                self.send_error(500, f\"Error
+    loading landing page: {e}\")\n\n        elif parsed_path.path == '/home':\n            #
+    Log the visit!\n            publish_message(\"Visited Home Page\")\n            \n
+    \           # Allow clean rendering of home/index with default data\n            file_path
+    = self.get_template_path(\"index.html\")\n            if os.path.exists(file_path):\n
+    \               with open(file_path, \"r\") as f:\n                    content
+    = f.read()\n                \n                # Replace placeholders\n                content
+    = content.replace(\"{{DATA}}\", \"Home Page\")\n                content = content.replace(\"{{TIMESTAMP}}\",
+    datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\"))\n                content = content.replace(\"{{OWNER}}\",
+    os.environ.get('OWNER_NAME', 'Guest'))\n                \n                self.send_response(200)\n
+    \               self.send_header('Content-type', 'text/html')\n                self.end_headers()\n
+    \               self.wfile.write(content.encode())\n            else:\n                self.send_error(404,
+    \"Home Template Not Found\")\n\n        elif parsed_path.path == '/view':\n            self.send_response(200)\n
     \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
     \           \n            conn = get_db_connection()\n            rows = []\n
     \           health_rows = []\n            if conn:\n                with conn.cursor()
-    as cur:\n                    # 1. Fetch Messages\n                    cur.execute(\"SELECT
+    as cur:\n                    # 1. Fetch Messages (Limit 10)\n                    cur.execute(\"SELECT
     to_regclass('public.messages');\")\n                    if cur.fetchone()[0]:\n
     \                       cur.execute(\"SELECT id, content, owner, timestamp FROM
-    messages ORDER BY id DESC\")\n                        rows = cur.fetchall()\n
-    \                   \n                    # 2. Fetch Health Logs\n                    cur.execute(\"SELECT
-    to_regclass('public.health');\")\n                    if cur.fetchone()[0]:\n
-    \                       cur.execute(\"SELECT id, app_name, status, timestamp FROM
-    health ORDER BY id DESC\")\n                        health_rows = cur.fetchall()\n
+    messages ORDER BY id DESC LIMIT 10\")\n                        rows = cur.fetchall()\n
+    \                   \n                    # 2. Fetch Health Logs (Limit 10)\n
+    \                   cur.execute(\"SELECT to_regclass('public.health');\")\n                    if
+    cur.fetchone()[0]:\n                         # Check if column exists\n                        try:\n
+    \                           cur.execute(\"SELECT id, app_name, status, timestamp,
+    pod_name FROM health ORDER BY id DESC LIMIT 10\")\n                        except
+    Exception:\n                            conn.rollback()\n                            cur.execute(\"SELECT
+    id, app_name, status, timestamp, NULL as pod_name FROM health ORDER BY id DESC
+    LIMIT 10\")\n                        \n                        health_rows = cur.fetchall()\n
     \               conn.close()\n\n            html = \"\"\"\n            <html>\n
     \           <head>\n                <title>Data View</title>\n                <style>\n
     \                   body { font-family: sans-serif; padding: 20px; background:
@@ -57,10 +71,11 @@ data:
     \           \"\"\"\n            for row in rows:\n                html += f\"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td></tr>\"\n
     \           \n            html += \"\"\"\n                </table>\n                \n
     \               <h2>Service Health Logs</h2>\n                <table>\n                    <tr><th>ID</th><th>App
-    Name</th><th>Status</th><th>Timestamp</th></tr>\n            \"\"\"\n            for
-    row in health_rows:\n                status_color = \"green\" if row[2] == \"Healthy\"
-    else \"orange\"\n                html += f\"<tr><td>{row[0]}</td><td>{row[1]}</td><td
-    style='color:{status_color}; font-weight:bold;'>{row[2]}</td><td>{row[3]}</td></tr>\"\n\n
+    Name</th><th>Status</th><th>Pod Name</th><th>Timestamp</th></tr>\n            \"\"\"\n
+    \           for row in health_rows:\n                status_color = \"green\"
+    if row[2] == \"Healthy\" else \"orange\"\n                pod_name = row[4] if
+    row[4] else \"N/A\"\n                html += f\"<tr><td>{row[0]}</td><td>{row[1]}</td><td
+    style='color:{status_color}; font-weight:bold;'>{row[2]}</td><td>{pod_name}</td><td>{row[3]}</td></tr>\"\n\n
     \           html += \"</table></body></html>\"\n            self.wfile.write(html.encode())\n\n
     \       elif parsed_path.path == '/home':\n            self.send_response(200)\n
     \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
@@ -208,18 +223,18 @@ data:
     class=\"log-console\" id=\"console\">\n        <div class=\"log-entry\"><span>SYSTEM</span>
     Ready.</div>\n    </div>\n\n    <footer>\n        <a href=\"/\">Home</a>\n        <a
     href=\"/save?data=FromArchitecture&template=default\">Design</a>\n        <a href=\"/save?data=FromArchitecture&template=space\">Space</a>\n
-    \       <a href=\"/save?data=FromArchitecture&template=webgl\">WebGL</a>\n        <a
-    href=\"/save?data=FromArchitecture&template=architecture\" style=\"color: var(--accent)\">Architecture</a>\n
-    \   </footer>\n\n    <script>\n        function log(msg) {\n            const
-    consoleDiv = document.getElementById('console');\n            const entry = document.createElement('div');\n
-    \           entry.className = 'log-entry';\n            const time = new Date().toLocaleTimeString();\n
-    \           entry.innerHTML = `<span>${time}</span> ${msg}`;\n            consoleDiv.insertBefore(entry,
-    consoleDiv.firstChild);\n        }\n\n        function animatePacket(id, delay)
-    {\n            const packet = document.getElementById(id);\n            setTimeout(()
-    => {\n                packet.style.animation = 'none';\n                packet.offsetHeight;
-    /* trigger reflow */\n                packet.style.animation = 'flow1 1s linear
-    forwards';\n            }, delay);\n        }\n\n        function triggerFlow()
-    {\n            log(\"Browser sending request...\");\n            animatePacket('p1',
+    \       <a href=\"/home\" style=\"color: #fff; margin-right: 10px; font-weight:
+    bold;\">Home</a>\n        <a href=\"/save?data={{DATA}}&template=default\" style=\"color:
+    #fff; margin-right: 10px;\">Design</a>\n    </footer>\n\n    <script>\n        function
+    log(msg) {\n            const consoleDiv = document.getElementById('console');\n
+    \           const entry = document.createElement('div');\n            entry.className
+    = 'log-entry';\n            const time = new Date().toLocaleTimeString();\n            entry.innerHTML
+    = `<span>${time}</span> ${msg}`;\n            consoleDiv.insertBefore(entry, consoleDiv.firstChild);\n
+    \       }\n\n        function animatePacket(id, delay) {\n            const packet
+    = document.getElementById(id);\n            setTimeout(() => {\n                packet.style.animation
+    = 'none';\n                packet.offsetHeight; /* trigger reflow */\n                packet.style.animation
+    = 'flow1 1s linear forwards';\n            }, delay);\n        }\n\n        function
+    triggerFlow() {\n            log(\"Browser sending request...\");\n            animatePacket('p1',
     0);\n\n            setTimeout(() => log(\"Nginx received request, proxying to
     Backend...\"), 1000);\n            animatePacket('p2', 1000);\n\n            setTimeout(()
     => log(\"Backend API processing. Publishing to RabbitMQ...\"), 2000);\n            animatePacket('p3',
@@ -230,26 +245,29 @@ data:
     5000);\n        }\n\n        // Auto trigger once on load\n        setTimeout(triggerFlow,
     500);\n\n    </script>\n</body>\n\n</html>"
   health_check.py: "import os\nimport time\nimport psycopg2\nimport pika\nimport sys\nfrom
-    datetime import datetime\n\n# Configuration\nAPP_NAME = os.environ.get('APP_NAME',
-    'Unknown-App')\nRABBITMQ_HOST = 'rabbitmq-service'\nDB_HOST = 'postgres-service'\nDB_NAME
-    = os.environ.get('POSTGRES_DB', 'messages_db')\nDB_USER = os.environ.get('POSTGRES_USER',
-    'admin')\nDB_PASS = os.environ.get('POSTGRES_PASSWORD', 'adminpassword')\n\ndef
-    get_db_connection():\n    try:\n        conn = psycopg2.connect(\n            host=DB_HOST,\n
-    \           database=DB_NAME,\n            user=DB_USER,\n            password=DB_PASS\n
-    \       )\n        return conn\n    except Exception as e:\n        print(f\"[{APP_NAME}]
-    DB Connection Failed: {e}\")\n        return None\n\ndef log_health(status):\n
-    \   conn = get_db_connection()\n    if not conn:\n        return False\n    \n
-    \   try:\n        with conn.cursor() as cur:\n            # Create table if not
-    exists\n            cur.execute(\"\"\"\n                CREATE TABLE IF NOT EXISTS
-    health (\n                    id SERIAL PRIMARY KEY,\n                    app_name
-    TEXT NOT NULL,\n                    status TEXT NOT NULL,\n                    timestamp
-    TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n                );\n            \"\"\")\n
-    \           \n            # Log status\n            cur.execute(\n                \"INSERT
-    INTO health (app_name, status) VALUES (%s, %s)\",\n                (APP_NAME,
-    status)\n            )\n            conn.commit()\n        conn.close()\n        print(f\"[{APP_NAME}]
-    Health Logged: {status}\")\n        return True\n    except Exception as e:\n
-    \       print(f\"[{APP_NAME}] Failed to log health: {e}\")\n        return False\n\ndef
-    check_rabbitmq():\n    try:\n        connection = pika.BlockingConnection(\n            pika.ConnectionParameters(host=RABBITMQ_HOST,
+    datetime import datetime\n\nimport socket\n\n# Configuration\nAPP_NAME = os.environ.get('APP_NAME',
+    'Unknown-App')\nPOD_NAME = socket.gethostname()\nRABBITMQ_HOST = 'rabbitmq-service'\nDB_HOST
+    = 'postgres-service'\nDB_NAME = os.environ.get('POSTGRES_DB', 'messages_db')\nDB_USER
+    = os.environ.get('POSTGRES_USER', 'admin')\nDB_PASS = os.environ.get('POSTGRES_PASSWORD',
+    'adminpassword')\n\ndef get_db_connection():\n    try:\n        conn = psycopg2.connect(\n
+    \           host=DB_HOST,\n            database=DB_NAME,\n            user=DB_USER,\n
+    \           password=DB_PASS\n        )\n        return conn\n    except Exception
+    as e:\n        print(f\"[{APP_NAME}] DB Connection Failed: {e}\")\n        return
+    None\n\ndef log_health(status):\n    conn = get_db_connection()\n    if not conn:\n
+    \       return False\n    \n    try:\n        with conn.cursor() as cur:\n            #
+    Create table if not exists (with pod_name)\n            cur.execute(\"\"\"\n                CREATE
+    TABLE IF NOT EXISTS health (\n                    id SERIAL PRIMARY KEY,\n                    app_name
+    TEXT NOT NULL,\n                    status TEXT NOT NULL,\n                    pod_name
+    TEXT,\n                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n                );\n
+    \           \"\"\")\n            \n            # Migration: Ensure pod_name column
+    exists for older tables\n            cur.execute(\"ALTER TABLE health ADD COLUMN
+    IF NOT EXISTS pod_name TEXT;\")\n            \n            # Log status\n            cur.execute(\n
+    \               \"INSERT INTO health (app_name, status, pod_name) VALUES (%s,
+    %s, %s)\",\n                (APP_NAME, status, POD_NAME)\n            )\n            conn.commit()\n
+    \       conn.close()\n        print(f\"[{APP_NAME}] Health Logged: {status} (Pod:
+    {POD_NAME})\")\n        return True\n    except Exception as e:\n        print(f\"[{APP_NAME}]
+    Failed to log health: {e}\")\n        return False\n\ndef check_rabbitmq():\n
+    \   try:\n        connection = pika.BlockingConnection(\n            pika.ConnectionParameters(host=RABBITMQ_HOST,
     connection_attempts=3, retry_delay=2)\n        )\n        connection.close()\n
     \       print(f\"[{APP_NAME}] RabbitMQ Connection: OK\")\n        return True\n
     \   except Exception as e:\n        print(f\"[{APP_NAME}] RabbitMQ Connection
@@ -690,9 +708,9 @@ data:
             </div>
 
             <footer>
-                <div style="margin-bottom: 20px;">
+                <div>
                     View as:
-                    <a href="/" style="color: #fff; margin-right: 10px; font-weight: bold;">Home</a>
+                    <a href="/home" style="color: #fff; margin-right: 10px; font-weight: bold;">Home</a>
                     <a href="/save?data={{DATA}}&template=default" style="color: #fff; margin-right: 10px;">Design</a>
                     <a href="/save?data={{DATA}}&template=space" style="color: #fff; margin-right: 10px;">Space</a>
                     <a href="/save?data={{DATA}}&template=webgl" style="color: #fff; margin-right: 10px;">WebGL</a>
@@ -1082,19 +1100,19 @@ data:
             </p>
 
             <div class="nav-grid">
-                <a href="/save?template=default" class="nav-btn btn-default">
+                <a href="/save?template=default&data=Design View" class="nav-btn btn-default">
                     Design View
                     <span>Standard Data Entry</span>
                 </a>
-                <a href="/save?template=space" class="nav-btn btn-space">
+                <a href="/save?template=space&data=Space View" class="nav-btn btn-space">
                     Space View
                     <span>Cosmic Visualization</span>
                 </a>
-                <a href="/save?template=webgl" class="nav-btn btn-webgl">
+                <a href="/save?template=webgl&data=WebGL View" class="nav-btn btn-webgl">
                     WebGL View
                     <span>3D Graphics Test</span>
                 </a>
-                <a href="/save?template=architecture" class="nav-btn btn-arch">
+                <a href="/save?template=architecture&data=Architecture View" class="nav-btn btn-arch">
                     Architecture
                     <span>System Diagrams</span>
                 </a>
@@ -1247,8 +1265,8 @@ data:
             <div class="meta">
                 <span><a href="/" style="color: #aaa; text-decoration: none;">HOME</a></span>
                 <span>Owner: {{OWNER}}</span>
-                <span><a href="/save?data={{DATA}}&template=architecture" style="color: #aaa; text-decoration: none;">VIEW
-                        ARCHITECTURE</a></span>
+                <span><a href="/save?data={{DATA}}&template=default"
+                        style="color: #aaa; text-decoration: none;">Design</a></span>
                 <span>{{TIMESTAMP}}</span>
             </div>
         </div>
@@ -1513,7 +1531,8 @@ data:
 
         <footer>
             <div>
-                <a href="/" style="color: rgba(255,255,255,0.8); margin-right: 20px; text-decoration: none;">HOME</a>
+                <a href="/home" style="color: #fff; margin-right: 10px; font-weight: bold;">Home</a>
+                <a href="/save?data={{DATA}}&template=default" style="color: #fff; margin-right: 10px;">Design</a>
                 Python Backend · Owned by {{OWNER}}
             </div>
             <div><a href="/save?data={{DATA}}&template=architecture"
@@ -1523,6 +1542,7 @@ data:
     </body>
 
     </html>
+    ```
   worker.py: "import pika\nimport psycopg2\nimport os\nimport time\nimport json\nimport
     sys\n\n# --- Configuration ---\nRABBITMQ_HOST = 'rabbitmq-service'\nDB_HOST =
     'postgres-service'\nDB_NAME = os.environ.get('POSTGRES_DB', 'messages_db')\nDB_USER
