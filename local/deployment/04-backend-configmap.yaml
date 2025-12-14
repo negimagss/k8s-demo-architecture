@@ -1,0 +1,1084 @@
+apiVersion: v1
+data:
+  app.py: "import http.server\nimport socketserver\nimport urllib.parse\nfrom datetime
+    import datetime\nimport os\nimport pika\nimport psycopg2\nimport json\n\nPORT
+    = 8000\n\n# Service Config\nRABBITMQ_HOST = 'rabbitmq-service'\nDB_HOST = 'postgres-service'\nDB_NAME
+    = os.environ.get('POSTGRES_DB', 'messages_db')\nDB_USER = os.environ.get('POSTGRES_USER',
+    'admin')\nDB_PASS = os.environ.get('POSTGRES_PASSWORD', 'adminpassword')\n\ndef
+    get_db_connection():\n    try:\n        conn = psycopg2.connect(\n            host=DB_HOST,\n
+    \           database=DB_NAME,\n            user=DB_USER,\n            password=DB_PASS\n
+    \       )\n        return conn\n    except Exception:\n        return None\n\ndef
+    publish_message(content, owner):\n    try:\n        connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))\n
+    \       channel = connection.channel()\n        channel.queue_declare(queue='task_queue',
+    durable=True)\n        \n        message = json.dumps({'content': content, 'owner':
+    owner})\n        \n        channel.basic_publish(\n            exchange='',\n
+    \           routing_key='task_queue',\n            body=message,\n            properties=pika.BasicProperties(\n
+    \               delivery_mode=2,  # make message persistent\n            ))\n
+    \       connection.close()\n        return True\n    except Exception as e:\n
+    \       print(f\"Failed to publish: {e}\")\n        return False\n\nclass MyHandler(http.server.SimpleHTTPRequestHandler):\n
+    \   def do_GET(self):\n        parsed_path = urllib.parse.urlparse(self.path)\n
+    \       query_params = urllib.parse.parse_qs(parsed_path.query)\n\n        if
+    parsed_path.path == '/':\n            self.send_response(200)\n            self.end_headers()\n
+    \           self.wfile.write(b\"Backend is Running (Microservices Mode)\")\n            \n
+    \       elif parsed_path.path == '/view':\n            self.send_response(200)\n
+    \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
+    \           \n            conn = get_db_connection()\n            rows = []\n
+    \           if conn:\n                with conn.cursor() as cur:\n                    #
+    Check if table exists first\n                    cur.execute(\"SELECT to_regclass('public.messages');\")\n
+    \                   if cur.fetchone()[0]:\n                        cur.execute(\"SELECT
+    id, content, owner, timestamp FROM messages ORDER BY id DESC\")\n                        rows
+    = cur.fetchall()\n                conn.close()\n\n            html = \"\"\"\n
+    \           <html>\n            <head>\n                <title>Data View</title>\n
+    \               <style>\n                    body { font-family: sans-serif; padding:
+    20px; background: #f0f0f0; }\n                    table { width: 100%; border-collapse:
+    collapse; background: white; }\n                    th, td { padding: 10px; border:
+    1px solid #ddd; text-align: left; }\n                    th { background: #333;
+    color: white; }\n                </style>\n            </head>\n            <body>\n
+    \               <h1>Stored Messages (Postgres)</h1>\n                <p><a href=\"/\">Back</a></p>\n
+    \               <table>\n                    <tr><th>ID</th><th>Content</th><th>Owner</th><th>Timestamp</th></tr>\n
+    \           \"\"\"\n            for row in rows:\n                html += f\"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td></tr>\"\n
+    \           \n            html += \"</table></body></html>\"\n            self.wfile.write(html.encode())\n\n
+    \       elif parsed_path.path == '/save':\n            data_to_save = query_params.get('data',
+    ['Default Data'])[0]\n            timestamp = datetime.now().strftime(\"%Y-%m-%d
+    %H:%M:%S\")\n            owner_name = os.environ.get('OWNER_NAME', 'Unknown Owner')\n
+    \           \n            # Publish to RabbitMQ\n            success = publish_message(data_to_save,
+    owner_name)\n            \n            self.send_response(200)\n            self.send_header('Content-type',
+    'text/html')\n            self.end_headers()\n            \n            # Determine
+    which template to load\n            template_param = query_params.get('template',
+    ['default'])[0]\n            if template_param == 'space':\n                template_path
+    = \"/app/space.html\"\n            elif template_param == 'webgl':\n                template_path
+    = \"/app/webgl.html\"\n            elif template_param == 'architecture':\n                template_path
+    = \"/app/architecture.html\"\n            else:\n                template_path
+    = \"/app/index.html\"\n\n            try:\n                with open(template_path,
+    \"r\") as template_file:\n                    html_content = template_file.read()\n
+    \               \n                response_content = html_content.replace(\"{{DATA}}\",
+    data_to_save) \\\n                                               .replace(\"{{TIMESTAMP}}\",
+    timestamp) \\\n                                               .replace(\"{{OWNER}}\",
+    owner_name)\n            except Exception as e:\n                response_content
+    = f\"Error loading template: {e}\"\n\n            self.wfile.write(response_content.encode())\n
+    \       else:\n            self.send_error(404, \"Not Found\")\n\nif __name__
+    == \"__main__\":\n    with socketserver.TCPServer((\"\", PORT), MyHandler) as
+    httpd:\n        print(\"serving at port\", PORT)\n        httpd.serve_forever()\n"
+  architecture.html: "<!DOCTYPE html>\n<html lang=\"en\">\n\n<head>\n    <meta charset=\"UTF-8\">\n
+    \   <title>Cluster Architecture</title>\n    <link href=\"https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap\"
+    rel=\"stylesheet\">\n    <style>\n        :root {\n            --bg-gradient:
+    linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 50%, #432c7a 100%);\n            --text-color:
+    #ffffff;\n            --card-bg: rgba(255, 255, 255, 0.1);\n            --card-border:
+    rgba(255, 255, 255, 0.2);\n\n            /* Node Colors */\n            --color-browser:
+    #ff00cc;\n            --color-nginx: #00ffcc;\n            --color-api: #ffcc00;\n
+    \           --color-rabbitmq: #ff6600;\n            --color-worker: #cd00ff;\n
+    \           --color-db: #33ccff;\n        }\n\n        body {\n            margin:
+    0;\n            background: var(--bg-gradient);\n            color: var(--text-color);\n
+    \           font-family: 'Space Mono', monospace;\n            display: flex;\n
+    \           flex-direction: column;\n            align-items: center;\n            min-height:
+    100vh;\n            overflow-x: hidden;\n        }\n\n        h1 {\n            margin-top:
+    40px;\n            font-size: 2.5rem;\n            background: linear-gradient(to
+    right, #ff00cc, #3333ff);\n            -webkit-background-clip: text;\n            background-clip:
+    text;\n            -webkit-text-fill-color: transparent;\n            text-transform:
+    uppercase;\n            letter-spacing: 4px;\n            text-shadow: 0 0 20px
+    rgba(255, 0, 204, 0.3);\n        }\n\n        .diagram-container {\n            display:
+    flex;\n            align-items: center;\n            justify-content: center;\n
+    \           gap: 20px;\n            margin-top: 80px;\n            flex-wrap:
+    wrap;\n            max-width: 1400px;\n            perspective: 1000px;\n        }\n\n
+    \       .node {\n            background: var(--card-bg);\n            border:
+    1px solid var(--card-border);\n            padding: 25px;\n            border-radius:
+    16px;\n            width: 140px;\n            text-align: center;\n            position:
+    relative;\n            backdrop-filter: blur(10px);\n            transition: all
+    0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);\n            box-shadow: 0 8px 32px
+    0 rgba(0, 0, 0, 0.3);\n        }\n\n        .node:hover {\n            transform:
+    translateY(-10px) scale(1.05);\n            box-shadow: 0 15px 40px rgba(0, 0,
+    0, 0.4);\n        }\n\n        .node-icon {\n            font-size: 40px;\n            margin-bottom:
+    12px;\n            display: block;\n            filter: drop-shadow(0 0 10px rgba(255,
+    255, 255, 0.3));\n        }\n\n        .node-title {\n            font-weight:
+    700;\n            font-size: 16px;\n            text-transform: uppercase;\n            letter-spacing:
+    1px;\n        }\n\n        .node-desc {\n            font-size: 11px;\n            opacity:
+    0.8;\n            margin-top: 6px;\n        }\n\n        /* Specific Node Styles
+    */\n        #browser {\n            border-color: var(--color-browser);\n            box-shadow:
+    0 0 15px rgba(255, 0, 204, 0.2);\n        }\n\n        #nginx {\n            border-color:
+    var(--color-nginx);\n            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);\n
+    \       }\n\n        #app {\n            border-color: var(--color-api);\n            box-shadow:
+    0 0 15px rgba(255, 204, 0, 0.2);\n        }\n\n        #rabbitmq {\n            border-color:
+    var(--color-rabbitmq);\n            box-shadow: 0 0 15px rgba(255, 102, 0, 0.2);\n
+    \       }\n\n        #worker {\n            border-color: var(--color-worker);\n
+    \           box-shadow: 0 0 15px rgba(205, 0, 255, 0.2);\n        }\n\n        #postgres
+    {\n            border-color: var(--color-db);\n            box-shadow: 0 0 15px
+    rgba(51, 204, 255, 0.2);\n        }\n\n        /* Fancy Arrows */\n        .arrow
+    {\n            position: relative;\n            width: 80px;\n            height:
+    4px;\n            background: rgba(255, 255, 255, 0.1);\n            border-radius:
+    2px;\n        }\n\n        /* Animated Packet */\n        .packet {\n            position:
+    absolute;\n            width: 16px;\n            height: 16px;\n            border-radius:
+    50%;\n            top: -6px;\n            left: 0;\n            opacity: 0;\n
+    \           background: #fff;\n            box-shadow: 0 0 15px #fff, 0 0 30px
+    #fff;\n            z-index: 10;\n        }\n\n        @keyframes flow1 {\n            0%
+    {\n                left: 0;\n                opacity: 1;\n                transform:
+    scale(0.8);\n            }\n\n            50% {\n                transform: scale(1.2);\n
+    \           }\n\n            90% {\n                left: 100%;\n                opacity:
+    1;\n                transform: scale(0.8);\n            }\n\n            100%
+    {\n                left: 100%;\n                opacity: 0;\n            }\n        }\n\n
+    \       /* Controls */\n        .controls {\n            margin-top: 80px;\n        }\n\n
+    \       button {\n            background: linear-gradient(45deg, #ff00cc, #3333ff);\n
+    \           color: #fff;\n            border: none;\n            padding: 18px
+    40px;\n            font-family: inherit;\n            font-weight: 700;\n            cursor:
+    pointer;\n            font-size: 16px;\n            border-radius: 50px;\n            box-shadow:
+    0 5px 20px rgba(51, 51, 255, 0.4);\n            transition: transform 0.2s, box-shadow
+    0.2s;\n            text-transform: uppercase;\n            letter-spacing: 1px;\n
+    \       }\n\n        button:hover {\n            transform: translateY(-2px);\n
+    \           box-shadow: 0 10px 25px rgba(51, 51, 255, 0.6);\n        }\n\n        button:active
+    {\n            transform: scale(0.95);\n        }\n\n        .log-console {\n
+    \           margin-top: 40px;\n            width: 80%;\n            max-width:
+    700px;\n            height: 150px;\n            background: rgba(0, 0, 0, 0.5);\n
+    \           border: 1px solid rgba(255, 255, 255, 0.1);\n            padding:
+    20px;\n            overflow-y: auto;\n            font-size: 12px;\n            color:
+    #ccc;\n            border-radius: 12px;\n            backdrop-filter: blur(5px);\n
+    \           font-family: 'Space Mono', monospace;\n        }\n\n        .log-entry
+    {\n            margin-bottom: 8px;\n            border-bottom: 1px solid rgba(255,
+    255, 255, 0.05);\n            padding-bottom: 4px;\n        }\n\n        .log-entry
+    span {\n            color: var(--color-nginx);\n            margin-right: 10px;\n
+    \           font-weight: bold;\n        }\n\n        footer {\n            margin-top:
+    auto;\n            padding: 40px;\n            text-align: center;\n            border-top:
+    1px solid rgba(255, 255, 255, 0.1);\n            width: 100%;\n            background:
+    rgba(0, 0, 0, 0.2);\n            backdrop-filter: blur(5px);\n        }\n\n        a
+    {\n            color: rgba(255, 255, 255, 0.6);\n            text-decoration:
+    none;\n            margin: 0 15px;\n            font-size: 14px;\n            text-transform:
+    uppercase;\n            letter-spacing: 1px;\n            transition: all 0.3s;\n
+    \           padding: 5px 10px;\n            border-radius: 4px;\n        }\n\n
+    \       a:hover {\n            color: #fff;\n            background: rgba(255,
+    255, 255, 0.1);\n            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);\n
+    \       }\n    </style>\n</head>\n\n<body>\n\n    <h1>Live Cluster Architecture</h1>\n\n
+    \   <div class=\"diagram-container\">\n\n        <div class=\"node\" id=\"browser\">\n
+    \           <span class=\"node-icon\">\U0001F4BB</span>\n            <div class=\"node-title\">Browser</div>\n
+    \           <div class=\"node-desc\">Client Request</div>\n        </div>\n\n
+    \       <div class=\"arrow\">\n            <div class=\"packet\" id=\"p1\"></div>\n
+    \       </div>\n\n        <div class=\"node\" id=\"nginx\">\n            <span
+    class=\"node-icon\">\U0001F6E1️</span>\n            <div class=\"node-title\">Nginx</div>\n
+    \           <div class=\"node-desc\">Reverse Proxy</div>\n        </div>\n\n        <div
+    class=\"arrow\">\n            <div class=\"packet\" id=\"p2\"></div>\n        </div>\n\n
+    \       <div class=\"node\" id=\"app\">\n            <span class=\"node-icon\">\U0001F40D</span>\n
+    \           <div class=\"node-title\">Backend API</div>\n            <div class=\"node-desc\">Producer</div>\n
+    \       </div>\n\n        <div class=\"arrow\">\n            <div class=\"packet\"
+    id=\"p3\"></div>\n        </div>\n\n        <div class=\"node\" id=\"rabbitmq\">\n
+    \           <span class=\"node-icon\">\U0001F430</span>\n            <div class=\"node-title\">RabbitMQ</div>\n
+    \           <div class=\"node-desc\">Message Broker</div>\n        </div>\n\n
+    \       <div class=\"arrow\">\n            <div class=\"packet\" id=\"p4\"></div>\n
+    \       </div>\n\n        <div class=\"node\" id=\"worker\">\n            <span
+    class=\"node-icon\">⚙️</span>\n            <div class=\"node-title\">Worker</div>\n
+    \           <div class=\"node-desc\">Consumer</div>\n        </div>\n\n        <div
+    class=\"arrow\">\n            <div class=\"packet\" id=\"p5\"></div>\n        </div>\n\n
+    \       <div class=\"node\" id=\"postgres\">\n            <span class=\"node-icon\">\U0001F418</span>\n
+    \           <div class=\"node-title\">Postgres</div>\n            <div class=\"node-desc\">Persistent
+    DB</div>\n        </div>\n\n    </div>\n\n    <div class=\"controls\">\n        <button
+    onclick=\"triggerFlow()\">Simulate Save Request</button>\n    </div>\n\n    <div
+    class=\"log-console\" id=\"console\">\n        <div class=\"log-entry\"><span>SYSTEM</span>
+    Ready.</div>\n    </div>\n\n    <footer>\n        <a href=\"/save?data=FromArchitecture&template=default\">Default</a>\n
+    \       <a href=\"/save?data=FromArchitecture&template=space\">Space</a>\n        <a
+    href=\"/save?data=FromArchitecture&template=webgl\">WebGL</a>\n        <a href=\"/save?data=FromArchitecture&template=architecture\"
+    style=\"color: var(--accent)\">Architecture</a>\n    </footer>\n\n    <script>\n
+    \       function log(msg) {\n            const consoleDiv = document.getElementById('console');\n
+    \           const entry = document.createElement('div');\n            entry.className
+    = 'log-entry';\n            const time = new Date().toLocaleTimeString();\n            entry.innerHTML
+    = `<span>${time}</span> ${msg}`;\n            consoleDiv.insertBefore(entry, consoleDiv.firstChild);\n
+    \       }\n\n        function animatePacket(id, delay) {\n            const packet
+    = document.getElementById(id);\n            setTimeout(() => {\n                packet.style.animation
+    = 'none';\n                packet.offsetHeight; /* trigger reflow */\n                packet.style.animation
+    = 'flow1 1s linear forwards';\n            }, delay);\n        }\n\n        function
+    triggerFlow() {\n            log(\"Browser sending request...\");\n            animatePacket('p1',
+    0);\n\n            setTimeout(() => log(\"Nginx received request, proxying to
+    Backend...\"), 1000);\n            animatePacket('p2', 1000);\n\n            setTimeout(()
+    => log(\"Backend API processing. Publishing to RabbitMQ...\"), 2000);\n            animatePacket('p3',
+    2000);\n\n            setTimeout(() => log(\"RabbitMQ queued message. Worker consuming...\"),
+    3000);\n            animatePacket('p4', 3000);\n\n            setTimeout(() =>
+    log(\"Worker processing. Inserting into Postgres...\"), 4000);\n            animatePacket('p5',
+    4000);\n\n            setTimeout(() => log(\"Success! Data persisted in database.\"),
+    5000);\n        }\n\n        // Auto trigger once on load\n        setTimeout(triggerFlow,
+    500);\n\n    </script>\n</body>\n\n</html>"
+  index.html: |-
+    <!DOCTYPE html>
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>Backend Service Status</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap"
+            rel="stylesheet">
+
+        <style>
+            :root {
+                --color-dark: #050505;
+                --color-light: #ffffff;
+                --font-sans: 'Inter', sans-serif;
+                --font-mono: 'Space Mono', monospace;
+            }
+
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                min-height: 100vh;
+                background-color: var(--color-dark);
+                color: var(--color-light);
+                font-family: var(--font-sans);
+                overflow-x: hidden;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+            }
+
+            /* --- THE CRAZY BACKGROUND --- */
+            .ambient-background {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -2;
+                overflow: hidden;
+                background: #000;
+            }
+
+            .orb {
+                position: absolute;
+                border-radius: 50%;
+                filter: blur(100px);
+                opacity: 0.7;
+                animation: moveOrb infinite alternate ease-in-out;
+            }
+
+            /* Intense, clashing color palette */
+            .orb-1 {
+                top: -20%;
+                left: -20%;
+                width: 60vw;
+                height: 60vw;
+                background: radial-gradient(circle, #ff0f7b, #ff5500);
+                animation-duration: 18s;
+            }
+
+            .orb-2 {
+                bottom: -30%;
+                right: -20%;
+                width: 70vw;
+                height: 70vw;
+                background: radial-gradient(circle, #00c6ff, #0072ff);
+                animation-duration: 25s;
+                animation-delay: -5s;
+            }
+
+            .orb-3 {
+                top: 40%;
+                left: 30%;
+                width: 50vw;
+                height: 50vw;
+                background: radial-gradient(circle, #39ff14, #aaff00);
+                animation-duration: 22s;
+                animation-delay: -10s;
+            }
+
+            .orb-4 {
+                top: 10%;
+                right: 10%;
+                width: 40vw;
+                height: 40vw;
+                background: radial-gradient(circle, #8A2387, #E94057, #F27121);
+                animation-duration: 30s;
+            }
+
+            @keyframes moveOrb {
+                0% {
+                    transform: translate(0, 0) rotate(0deg) scale(1);
+                }
+
+                50% {
+                    transform: translate(15%, 10%) rotate(180deg) scale(1.1);
+                }
+
+                100% {
+                    transform: translate(-10%, -15%) rotate(360deg) scale(0.9);
+                }
+            }
+
+            /* Cinematic Grain Overlay */
+            .noise-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -1;
+                opacity: 0.06;
+                pointer-events: none;
+                background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            }
+
+            /* --- MAIN GLASS CONTAINER --- */
+            .main-glass-panel {
+                width: 100%;
+                max-width: 1100px;
+                min-height: 80vh;
+                /* Super frosted glass effect */
+                background: rgba(255, 255, 255, 0.03);
+                backdrop-filter: blur(40px) saturate(1.5);
+                -webkit-backdrop-filter: blur(40px) saturate(1.5);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 30px;
+                padding: 60px;
+                box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                /* Entrance animation for container */
+                opacity: 0;
+                transform: translateY(30px);
+                animation: fadeSlideUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            }
+
+            /* Header */
+            header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 80px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .brand {
+                font-weight: 900;
+                font-size: 20px;
+            }
+
+            .badge {
+                background: var(--color-light);
+                color: var(--color-dark);
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: 800;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            /* Pulsing success dot */
+            .badge::before {
+                content: '';
+                display: block;
+                width: 8px;
+                height: 8px;
+                background: #00ff44;
+                border-radius: 50%;
+                box-shadow: 0 0 10px #00ff44;
+                animation: pulse 2s infinite;
+            }
+
+            /* Content Grid */
+            .content-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 60px;
+                align-items: center;
+            }
+
+            @media (min-width: 900px) {
+                .content-grid {
+                    grid-template-columns: 1.2fr 1fr;
+                }
+            }
+
+            /* Hero Typography */
+            h1 {
+                font-size: clamp(40px, 8vw, 80px);
+                /* Responsive massive font */
+                font-weight: 900;
+                line-height: 0.9;
+                letter-spacing: -2px;
+                margin-bottom: 30px;
+            }
+
+            /* Animated Gradient Text */
+            .highlight-kinetic {
+                display: block;
+                background: linear-gradient(45deg, #ff00cc, #3333ff, #00ffcc, #ffcc00);
+                background-size: 300% 300%;
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation: gradientShift 5s ease infinite;
+            }
+
+            .subtitle {
+                font-size: 20px;
+                line-height: 1.5;
+                opacity: 0.8;
+                max-width: 500px;
+                font-family: var(--font-mono);
+            }
+
+            /* Data Card - The Tech Piece */
+            .data-card {
+                background: rgba(0, 0, 0, 0.6);
+                border: 1px solid rgba(100, 100, 255, 0.3);
+                border-radius: 20px;
+                padding: 30px;
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            }
+
+            /* Scanning line animation over data card */
+            .data-card::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 5px;
+                background: linear-gradient(90deg, transparent, rgba(0, 255, 200, 0.8), transparent);
+                animation: scanline 3s linear infinite;
+            }
+
+            .card-title {
+                font-family: var(--font-mono);
+                text-transform: uppercase;
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.6);
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+            }
+
+            .card-title span.status-blink {
+                color: #00ffcc;
+                animation: blink 1s infinite;
+            }
+
+            .data-payload {
+                font-family: var(--font-mono);
+                font-size: 16px;
+                color: #00ffcc;
+                word-break: break-all;
+                max-height: 300px;
+                overflow-y: auto;
+                text-shadow: 0 0 5px rgba(0, 255, 204, 0.5);
+
+            }
+
+            /* Footer */
+            footer {
+                margin-top: auto;
+                padding-top: 60px;
+                border-top: 2px solid rgba(255, 255, 255, 0.1);
+                display: flex;
+                justify-content: space-between;
+                font-family: var(--font-mono);
+                font-size: 12px;
+                opacity: 0.7;
+                text-transform: uppercase;
+            }
+
+            footer b {
+                color: var(--color-light);
+            }
+
+            /* Animations */
+            @keyframes gradientShift {
+                0% {
+                    background-position: 0% 50%;
+                }
+
+                50% {
+                    background-position: 100% 50%;
+                }
+
+                100% {
+                    background-position: 0% 50%;
+                }
+            }
+
+            @keyframes pulse {
+                0% {
+                    opacity: 0.5;
+                    box-shadow: 0 0 0px #00ff44;
+                }
+
+                50% {
+                    opacity: 1;
+                    box-shadow: 0 0 15px #00ff44;
+                }
+
+                100% {
+                    opacity: 0.5;
+                    box-shadow: 0 0 0px #00ff44;
+                }
+            }
+
+            @keyframes scanline {
+                0% {
+                    top: -10%;
+                }
+
+                100% {
+                    top: 110%;
+                }
+            }
+
+            @keyframes blink {
+                50% {
+                    opacity: 0;
+                }
+            }
+
+            @keyframes fadeSlideUp {
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            /* Staggered entrance for content elements */
+            header {
+                animation: fadeSlideUp 0.8s ease-out 0.3s forwards;
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            .hero-text {
+                animation: fadeSlideUp 0.8s ease-out 0.5s forwards;
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            .data-card-container {
+                animation: fadeSlideUp 0.8s ease-out 0.7s forwards;
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            footer {
+                animation: fadeSlideUp 0.8s ease-out 0.9s forwards;
+                opacity: 0;
+                transform: translateY(20px);
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <div class="ambient-background">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+            <div class="orb orb-4"></div>
+            <div class="noise-overlay"></div>
+        </div>
+
+        <main class="main-glass-panel">
+            <header>
+                <div class="brand">Shardul Negi</div>
+                <div class="badge">Backend · Success</div>
+            </header>
+
+            <div class="content-grid">
+                <section class="hero-text">
+                    <h1>
+                        Your data is <br />
+                        <span class="highlight-kinetic">securely persisted.</span>
+                    </h1>
+                    <p class="subtitle">
+                        The backend processed your request successfully and committed
+                        the payload to durable storage with full integrity guarantees.
+                    </p>
+                </section>
+
+                <section class="data-card-container">
+                    <div class="data-card">
+                        <div class="card-title">
+                            Stored Payload
+                            <span class="status-blink">Is Active_</span>
+                        </div>
+                        <div class="data-payload">
+                            > BEGIN_PAYLOAD <br>
+                            {{DATA}}
+                            <br>> END_STREAM
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <footer>
+                <div style="margin-bottom: 20px;">
+                    View as:
+                    <a href="/save?data={{DATA}}&template=default" style="color: #fff; margin-right: 10px;">Default</a>
+                    <a href="/save?data={{DATA}}&template=space" style="color: #fff; margin-right: 10px;">Space</a>
+                    <a href="/save?data={{DATA}}&template=webgl" style="color: #fff; margin-right: 10px;">WebGL</a>
+                    <a href="/save?data={{DATA}}&template=architecture" style="color: #00ff9d;">Architecture</a>
+                </div>
+                <div>
+                    Served by <b>Python Backend</b><br />
+                    {{TIMESTAMP}}
+                </div>
+                <div>
+                    Owned by: <b>{{OWNER}}</b>
+                </div>
+            </footer>
+        </main>
+
+    </body>
+
+    </html>
+  space.html: |-
+    <!DOCTYPE html>
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <title>Warp Status</title>
+        <style>
+            body {
+                margin: 0;
+                overflow: hidden;
+                background: #000;
+                color: #fff;
+                font-family: 'Helvetica Neue', Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+
+            /* The Canvas sits behind everything */
+            canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 0;
+            }
+
+            /* The HUD Container */
+            .hud-container {
+                z-index: 10;
+                text-align: center;
+                width: 600px;
+                background: rgba(0, 0, 0, 0.4);
+                backdrop-filter: blur(10px);
+                /* Frosted glass */
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 60px;
+                border-radius: 50% 50% 0 0;
+                /* Dome shape */
+                border-bottom: 2px solid white;
+                animation: float 6s ease-in-out infinite;
+            }
+
+            @keyframes float {
+                0% {
+                    transform: translateY(0px);
+                }
+
+                50% {
+                    transform: translateY(-20px);
+                }
+
+                100% {
+                    transform: translateY(0px);
+                }
+            }
+
+            h1 {
+                font-weight: 100;
+                letter-spacing: 10px;
+                text-transform: uppercase;
+                font-size: 14px;
+                margin-bottom: 10px;
+                color: #aaa;
+            }
+
+            h2 {
+                font-size: 60px;
+                margin: 0 0 30px 0;
+                font-weight: 700;
+                background: -webkit-linear-gradient(#fff, #666);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+
+            .circle-data {
+                width: 200px;
+                height: 200px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 50%;
+                margin: 0 auto 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: monospace;
+                font-size: 14px;
+                position: relative;
+                background: rgba(0, 0, 0, 0.8);
+                box-shadow: 0 0 50px rgba(255, 255, 255, 0.1);
+            }
+
+            /* Rotating ring around data */
+            .circle-data::before {
+                content: '';
+                position: absolute;
+                top: -10px;
+                left: -10px;
+                right: -10px;
+                bottom: -10px;
+                border-radius: 50%;
+                border: 2px dashed rgba(255, 255, 255, 0.2);
+                animation: spin 10s linear infinite;
+            }
+
+            @keyframes spin {
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+
+            .meta {
+                display: flex;
+                justify-content: space-between;
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                color: #888;
+                border-top: 1px solid #333;
+                padding-top: 20px;
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <canvas id="starfield"></canvas>
+
+        <div class="hud-container">
+            <h1>Status Report</h1>
+            <h2>SECURE</h2>
+
+            <div class="circle-data">
+                {{DATA}}
+            </div>
+
+            <div class="meta">
+                <span>Owner: {{OWNER}}</span>
+                <span><a href="/save?data={{DATA}}&template=architecture" style="color: #aaa; text-decoration: none;">VIEW
+                        ARCHITECTURE</a></span>
+                <span>{{TIMESTAMP}}</span>
+            </div>
+        </div>
+
+        <script>
+            // JAVASCRIPT FOR STARFIELD ANIMATION
+            const canvas = document.getElementById('starfield');
+            const ctx = canvas.getContext('2d');
+            let width, height;
+            let stars = [];
+
+            function init() {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width;
+                canvas.height = height;
+                stars = [];
+                for (let i = 0; i < 800; i++) {
+                    stars.push({
+                        x: Math.random() * width - width / 2,
+                        y: Math.random() * height - height / 2,
+                        z: Math.random() * width
+                    });
+                }
+            }
+
+            function draw() {
+                // Leave trails for "warp speed" effect
+                ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+                ctx.fillRect(0, 0, width, height);
+
+                ctx.fillStyle = "#ffffff";
+
+                for (let i = 0; i < stars.length; i++) {
+                    let star = stars[i];
+                    star.z -= 10; // Speed of stars
+
+                    if (star.z <= 0) {
+                        star.z = width;
+                        star.x = Math.random() * width - width / 2;
+                        star.y = Math.random() * height - height / 2;
+                    }
+
+                    let x = (star.x / star.z) * width + width / 2;
+                    let y = (star.y / star.z) * height + height / 2;
+                    let size = (1 - star.z / width) * 3;
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                requestAnimationFrame(draw);
+            }
+
+            window.addEventListener('resize', init);
+            init();
+            draw();
+        </script>
+    </body>
+
+    </html>
+  webgl.html: |-
+    <!DOCTYPE html>
+
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>Data Persisted</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <!-- Fonts -->
+
+        <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=Inter:wght@400;600&display=swap"
+            rel="stylesheet">
+
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                min-height: 100vh;
+                overflow: hidden;
+                font-family: 'Inter', sans-serif;
+                background: linear-gradient(120deg, #ff0080, #7928ca, #2afadf, #00ff87);
+                background-size: 400% 400%;
+                animation: gradientMove 12s ease infinite;
+                color: #fff;
+            }
+
+            @keyframes gradientMove {
+                0% {
+                    background-position: 0% 50%;
+                }
+
+                50% {
+                    background-position: 100% 50%;
+                }
+
+                100% {
+                    background-position: 0% 50%;
+                }
+            }
+
+            .noise {
+                position: fixed;
+                inset: 0;
+                background-image: url('https://grainy-gradients.vercel.app/noise.svg');
+                opacity: 0.15;
+                pointer-events: none;
+                z-index: 1;
+            }
+
+            header {
+                position: relative;
+                z-index: 2;
+                padding: 32px 48px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-family: 'Syne', sans-serif;
+            }
+
+            .name {
+                font-size: 22px;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+            }
+
+            .pulse {
+                padding: 10px 18px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.18);
+                backdrop-filter: blur(10px);
+                animation: pulse 2s infinite;
+            }
+
+            @keyframes pulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6);
+                }
+
+                70% {
+                    box-shadow: 0 0 0 18px rgba(255, 255, 255, 0);
+                }
+
+                100% {
+                    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+                }
+            }
+
+            main {
+                position: relative;
+                z-index: 2;
+                height: calc(100vh - 160px);
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                padding: 0 80px;
+                align-items: center;
+            }
+
+            h1 {
+                font-family: 'Syne', sans-serif;
+                font-size: 84px;
+                line-height: 0.95;
+                margin: 0 0 24px;
+            }
+
+            .glow {
+                text-shadow:
+                    0 0 20px rgba(255, 255, 255, 0.4),
+                    0 0 60px rgba(255, 0, 128, 0.6);
+            }
+
+            .desc {
+                font-size: 20px;
+                max-width: 520px;
+                opacity: 0.9;
+            }
+
+            .orb {
+                width: 420px;
+                height: 420px;
+                border-radius: 50%;
+                background:
+                    radial-gradient(circle at 30% 30%, #ffffff, #ff0080, #7928ca);
+                filter: blur(0.5px);
+                animation: float 6s ease-in-out infinite;
+                box-shadow:
+                    0 0 80px rgba(255, 255, 255, 0.6),
+                    inset 0 0 60px rgba(0, 0, 0, 0.2);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                padding: 40px;
+            }
+
+            @keyframes float {
+
+                0%,
+                100% {
+                    transform: translateY(0);
+                }
+
+                50% {
+                    transform: translateY(-30px);
+                }
+            }
+
+            .payload {
+                font-size: 18px;
+                font-weight: 600;
+                background: rgba(0, 0, 0, 0.35);
+                padding: 18px 22px;
+                border-radius: 14px;
+                word-break: break-word;
+            }
+
+            footer {
+                position: absolute;
+                bottom: 24px;
+                left: 48px;
+                right: 48px;
+                z-index: 2;
+                display: flex;
+                justify-content: space-between;
+                font-size: 14px;
+                opacity: 0.85;
+            }
+        </style>
+
+    </head>
+
+    <body>
+
+        <div class="noise"></div>
+
+        <header>
+            <div class="name">Shardul Negi</div>
+            <div class="pulse">✓ Backend Write Complete</div>
+        </header>
+
+        <main>
+            <section>
+                <h1 class="glow">Data<br />Locked<br />In.</h1>
+                <p class="desc">
+                    Your request didn’t just succeed — it was committed, verified,
+                    and etched into durable storage.
+                </p>
+            </section>
+
+            ```
+            <section class="orb">
+                <div class="payload">{{DATA}}</div>
+            </section>
+            ```
+
+        </main>
+
+        <footer>
+            <div>Python Backend · Owned by {{OWNER}}</div>
+            <div><a href="/save?data={{DATA}}&template=architecture"
+                    style="color: rgba(255,255,255,0.8); margin-right: 20px;">ARCHITECTURE</a> {{TIMESTAMP}}</div>
+        </footer>
+
+    </body>
+
+    </html>
+  worker.py: "import pika\nimport psycopg2\nimport os\nimport time\nimport json\nimport
+    sys\n\n# --- Configuration ---\nRABBITMQ_HOST = 'rabbitmq-service'\nDB_HOST =
+    'postgres-service'\nDB_NAME = os.environ.get('POSTGRES_DB', 'messages_db')\nDB_USER
+    = os.environ.get('POSTGRES_USER', 'admin')\nDB_PASS = os.environ.get('POSTGRES_PASSWORD',
+    'adminpassword')\n\ndef get_db_connection():\n    try:\n        conn = psycopg2.connect(\n
+    \           host=DB_HOST,\n            database=DB_NAME,\n            user=DB_USER,\n
+    \           password=DB_PASS\n        )\n        return conn\n    except Exception
+    as e:\n        print(f\"Error connecting to DB: {e}\")\n        return None\n\ndef
+    init_db():\n    conn = get_db_connection()\n    if conn:\n        with conn.cursor()
+    as cur:\n            cur.execute(\"\"\"\n                CREATE TABLE IF NOT EXISTS
+    messages (\n                    id SERIAL PRIMARY KEY,\n                    content
+    TEXT NOT NULL,\n                    owner TEXT,\n                    timestamp
+    TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n                );\n            \"\"\")\n
+    \           conn.commit()\n        conn.close()\n        print(\"Database initialized.\")\n\ndef
+    callback(ch, method, properties, body):\n    message_data = json.loads(body)\n
+    \   content = message_data.get('content')\n    owner = message_data.get('owner')\n
+    \   print(f\"Received: {content}\")\n    \n    # Log to file for debugging\n    with
+    open(\"/tmp/worker.log\", \"a\") as f:\n        f.write(f\"Received message: {content}\\n\")\n\n
+    \   conn = get_db_connection()\n    if conn:\n        try:\n            with conn.cursor()
+    as cur:\n                cur.execute(\n                    \"INSERT INTO messages
+    (content, owner) VALUES (%s, %s)\",\n                    (content, owner)\n                )\n
+    \               conn.commit()\n                print(\"Saved to DB\")\n        except
+    Exception as e:\n            print(f\"Error saving to DB: {e}\")\n        finally:\n
+    \           conn.close()\n    \n    ch.basic_ack(delivery_tag=method.delivery_tag)\n\ndef
+    main():\n    print(\"Worker starting...\")\n    # Wait for services (simple retry
+    logic)\n    time.sleep(10)\n    init_db()\n\n    # Connect to RabbitMQ\n    while
+    True:\n        try:\n            connection = pika.BlockingConnection(\n                pika.ConnectionParameters(host=RABBITMQ_HOST)\n
+    \           )\n            channel = connection.channel()\n            channel.queue_declare(queue='task_queue',
+    durable=True)\n\n            channel.basic_qos(prefetch_count=1)\n            channel.basic_consume(queue='task_queue',
+    on_message_callback=callback)\n\n            print('Waiting for messages...')\n
+    \           channel.start_consuming()\n        except Exception as e:\n            print(f\"Connection
+    failed, retrying in 5s: {e}\")\n            time.sleep(5)\n\nif __name__ == '__main__':\n
+    \   main()\n"
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: backend-script
+  namespace: local-test

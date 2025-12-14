@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Warp Status</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* The Canvas sits behind everything */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+
+        /* The HUD Container */
+        .hud-container {
+            z-index: 10;
+            text-align: center;
+            width: 600px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            /* Frosted glass */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 60px;
+            border-radius: 50% 50% 0 0;
+            /* Dome shape */
+            border-bottom: 2px solid white;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+
+            100% {
+                transform: translateY(0px);
+            }
+        }
+
+        h1 {
+            font-weight: 100;
+            letter-spacing: 10px;
+            text-transform: uppercase;
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #aaa;
+        }
+
+        h2 {
+            font-size: 60px;
+            margin: 0 0 30px 0;
+            font-weight: 700;
+            background: -webkit-linear-gradient(#fff, #666);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .circle-data {
+            width: 200px;
+            height: 200px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            margin: 0 auto 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            font-size: 14px;
+            position: relative;
+            background: rgba(0, 0, 0, 0.8);
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.1);
+        }
+
+        /* Rotating ring around data */
+        .circle-data::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: 50%;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            animation: spin 10s linear infinite;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #888;
+            border-top: 1px solid #333;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="starfield"></canvas>
+
+    <div class="hud-container">
+        <h1>Status Report</h1>
+        <h2>SECURE</h2>
+
+        <div class="circle-data">
+            {{DATA}}
+        </div>
+
+        <div class="meta">
+            <span>Owner: {{OWNER}}</span>
+            <span><a href="/save?data={{DATA}}&template=architecture" style="color: #aaa; text-decoration: none;">VIEW
+                    ARCHITECTURE</a></span>
+            <span>{{TIMESTAMP}}</span>
+        </div>
+    </div>
+
+    <script>
+        // JAVASCRIPT FOR STARFIELD ANIMATION
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let stars = [];
+
+        function init() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            stars = [];
+            for (let i = 0; i < 800; i++) {
+                stars.push({
+                    x: Math.random() * width - width / 2,
+                    y: Math.random() * height - height / 2,
+                    z: Math.random() * width
+                });
+            }
+        }
+
+        function draw() {
+            // Leave trails for "warp speed" effect
+            ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.fillStyle = "#ffffff";
+
+            for (let i = 0; i < stars.length; i++) {
+                let star = stars[i];
+                star.z -= 10; // Speed of stars
+
+                if (star.z <= 0) {
+                    star.z = width;
+                    star.x = Math.random() * width - width / 2;
+                    star.y = Math.random() * height - height / 2;
+                }
+
+                let x = (star.x / star.z) * width + width / 2;
+                let y = (star.y / star.z) * height + height / 2;
+                let size = (1 - star.z / width) * 3;
+
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            requestAnimationFrame(draw);
+        }
+
+        window.addEventListener('resize', init);
+        init();
+        draw();
+    </script>
+</body>
+
+</html>

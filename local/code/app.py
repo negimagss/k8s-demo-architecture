@@ -1,0 +1,141 @@
+import http.server
+import socketserver
+import urllib.parse
+from datetime import datetime
+import os
+import pika
+import psycopg2
+import json
+
+PORT = 8000
+
+# Service Config
+RABBITMQ_HOST = 'rabbitmq-service'
+DB_HOST = 'postgres-service'
+DB_NAME = os.environ.get('POSTGRES_DB', 'messages_db')
+DB_USER = os.environ.get('POSTGRES_USER', 'admin')
+DB_PASS = os.environ.get('POSTGRES_PASSWORD', 'adminpassword')
+
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS
+        )
+        return conn
+    except Exception:
+        return None
+
+def publish_message(content, owner):
+    try:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+        channel = connection.channel()
+        channel.queue_declare(queue='task_queue', durable=True)
+        
+        message = json.dumps({'content': content, 'owner': owner})
+        
+        channel.basic_publish(
+            exchange='',
+            routing_key='task_queue',
+            body=message,
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # make message persistent
+            ))
+        connection.close()
+        return True
+    except Exception as e:
+        print(f"Failed to publish: {e}")
+        return False
+
+class MyHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        parsed_path = urllib.parse.urlparse(self.path)
+        query_params = urllib.parse.parse_qs(parsed_path.query)
+
+        if parsed_path.path == '/':
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Backend is Running (Microservices Mode)")
+            
+        elif parsed_path.path == '/view':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            
+            conn = get_db_connection()
+            rows = []
+            if conn:
+                with conn.cursor() as cur:
+                    # Check if table exists first
+                    cur.execute("SELECT to_regclass('public.messages');")
+                    if cur.fetchone()[0]:
+                        cur.execute("SELECT id, content, owner, timestamp FROM messages ORDER BY id DESC")
+                        rows = cur.fetchall()
+                conn.close()
+
+            html = """
+            <html>
+            <head>
+                <title>Data View</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
+                    table { width: 100%; border-collapse: collapse; background: white; }
+                    th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+                    th { background: #333; color: white; }
+                </style>
+            </head>
+            <body>
+                <h1>Stored Messages (Postgres)</h1>
+                <p><a href="/">Back</a></p>
+                <table>
+                    <tr><th>ID</th><th>Content</th><th>Owner</th><th>Timestamp</th></tr>
+            """
+            for row in rows:
+                html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td></tr>"
+            
+            html += "</table></body></html>"
+            self.wfile.write(html.encode())
+
+        elif parsed_path.path == '/save':
+            data_to_save = query_params.get('data', ['Default Data'])[0]
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            owner_name = os.environ.get('OWNER_NAME', 'Unknown Owner')
+            
+            # Publish to RabbitMQ
+            success = publish_message(data_to_save, owner_name)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            
+            # Determine which template to load
+            template_param = query_params.get('template', ['default'])[0]
+            if template_param == 'space':
+                template_path = "/app/space.html"
+            elif template_param == 'webgl':
+                template_path = "/app/webgl.html"
+            elif template_param == 'architecture':
+                template_path = "/app/architecture.html"
+            else:
+                template_path = "/app/index.html"
+
+            try:
+                with open(template_path, "r") as template_file:
+                    html_content = template_file.read()
+                
+                response_content = html_content.replace("{{DATA}}", data_to_save) \
+                                               .replace("{{TIMESTAMP}}", timestamp) \
+                                               .replace("{{OWNER}}", owner_name)
+            except Exception as e:
+                response_content = f"Error loading template: {e}"
+
+            self.wfile.write(response_content.encode())
+        else:
+            self.send_error(404, "Not Found")
+
+if __name__ == "__main__":
+    with socketserver.TCPServer(("", PORT), MyHandler) as httpd:
+        print("serving at port", PORT)
+        httpd.serve_forever()

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Data Persisted</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Fonts -->
+
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=Inter:wght@400;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(120deg, #ff0080, #7928ca, #2afadf, #00ff87);
+            background-size: 400% 400%;
+            animation: gradientMove 12s ease infinite;
+            color: #fff;
+        }
+
+        @keyframes gradientMove {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .noise {
+            position: fixed;
+            inset: 0;
+            background-image: url('https://grainy-gradients.vercel.app/noise.svg');
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        header {
+            position: relative;
+            z-index: 2;
+            padding: 32px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: 'Syne', sans-serif;
+        }
+
+        .name {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+        }
+
+        .pulse {
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(10px);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6);
+            }
+
+            70% {
+                box-shadow: 0 0 0 18px rgba(255, 255, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+            }
+        }
+
+        main {
+            position: relative;
+            z-index: 2;
+            height: calc(100vh - 160px);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 0 80px;
+            align-items: center;
+        }
+
+        h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: 84px;
+            line-height: 0.95;
+            margin: 0 0 24px;
+        }
+
+        .glow {
+            text-shadow:
+                0 0 20px rgba(255, 255, 255, 0.4),
+                0 0 60px rgba(255, 0, 128, 0.6);
+        }
+
+        .desc {
+            font-size: 20px;
+            max-width: 520px;
+            opacity: 0.9;
+        }
+
+        .orb {
+            width: 420px;
+            height: 420px;
+            border-radius: 50%;
+            background:
+                radial-gradient(circle at 30% 30%, #ffffff, #ff0080, #7928ca);
+            filter: blur(0.5px);
+            animation: float 6s ease-in-out infinite;
+            box-shadow:
+                0 0 80px rgba(255, 255, 255, 0.6),
+                inset 0 0 60px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-30px);
+            }
+        }
+
+        .payload {
+            font-size: 18px;
+            font-weight: 600;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 18px 22px;
+            border-radius: 14px;
+            word-break: break-word;
+        }
+
+        footer {
+            position: absolute;
+            bottom: 24px;
+            left: 48px;
+            right: 48px;
+            z-index: 2;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            opacity: 0.85;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="noise"></div>
+
+    <header>
+        <div class="name">Shardul Negi</div>
+        <div class="pulse">✓ Backend Write Complete</div>
+    </header>
+
+    <main>
+        <section>
+            <h1 class="glow">Data<br />Locked<br />In.</h1>
+            <p class="desc">
+                Your request didn’t just succeed — it was committed, verified,
+                and etched into durable storage.
+            </p>
+        </section>
+
+        ```
+        <section class="orb">
+            <div class="payload">{{DATA}}</div>
+        </section>
+        ```
+
+    </main>
+
+    <footer>
+        <div>Python Backend · Owned by {{OWNER}}</div>
+        <div><a href="/save?data={{DATA}}&template=architecture"
+                style="color: rgba(255,255,255,0.8); margin-right: 20px;">ARCHITECTURE</a> {{TIMESTAMP}}</div>
+    </footer>
+
+</body>
+
+</html>

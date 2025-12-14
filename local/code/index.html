@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Backend Service Status</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --color-dark: #050505;
+            --color-light: #ffffff;
+            --font-sans: 'Inter', sans-serif;
+            --font-mono: 'Space Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: var(--color-dark);
+            color: var(--color-light);
+            font-family: var(--font-sans);
+            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* --- THE CRAZY BACKGROUND --- */
+        .ambient-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.7;
+            animation: moveOrb infinite alternate ease-in-out;
+        }
+
+        /* Intense, clashing color palette */
+        .orb-1 {
+            top: -20%;
+            left: -20%;
+            width: 60vw;
+            height: 60vw;
+            background: radial-gradient(circle, #ff0f7b, #ff5500);
+            animation-duration: 18s;
+        }
+
+        .orb-2 {
+            bottom: -30%;
+            right: -20%;
+            width: 70vw;
+            height: 70vw;
+            background: radial-gradient(circle, #00c6ff, #0072ff);
+            animation-duration: 25s;
+            animation-delay: -5s;
+        }
+
+        .orb-3 {
+            top: 40%;
+            left: 30%;
+            width: 50vw;
+            height: 50vw;
+            background: radial-gradient(circle, #39ff14, #aaff00);
+            animation-duration: 22s;
+            animation-delay: -10s;
+        }
+
+        .orb-4 {
+            top: 10%;
+            right: 10%;
+            width: 40vw;
+            height: 40vw;
+            background: radial-gradient(circle, #8A2387, #E94057, #F27121);
+            animation-duration: 30s;
+        }
+
+        @keyframes moveOrb {
+            0% {
+                transform: translate(0, 0) rotate(0deg) scale(1);
+            }
+
+            50% {
+                transform: translate(15%, 10%) rotate(180deg) scale(1.1);
+            }
+
+            100% {
+                transform: translate(-10%, -15%) rotate(360deg) scale(0.9);
+            }
+        }
+
+        /* Cinematic Grain Overlay */
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.06;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        /* --- MAIN GLASS CONTAINER --- */
+        .main-glass-panel {
+            width: 100%;
+            max-width: 1100px;
+            min-height: 80vh;
+            /* Super frosted glass effect */
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(40px) saturate(1.5);
+            -webkit-backdrop-filter: blur(40px) saturate(1.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 30px;
+            padding: 60px;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            /* Entrance animation for container */
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeSlideUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 80px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .brand {
+            font-weight: 900;
+            font-size: 20px;
+        }
+
+        .badge {
+            background: var(--color-light);
+            color: var(--color-dark);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 800;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Pulsing success dot */
+        .badge::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 8px;
+            background: #00ff44;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff44;
+            animation: pulse 2s infinite;
+        }
+
+        /* Content Grid */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        @media (min-width: 900px) {
+            .content-grid {
+                grid-template-columns: 1.2fr 1fr;
+            }
+        }
+
+        /* Hero Typography */
+        h1 {
+            font-size: clamp(40px, 8vw, 80px);
+            /* Responsive massive font */
+            font-weight: 900;
+            line-height: 0.9;
+            letter-spacing: -2px;
+            margin-bottom: 30px;
+        }
+
+        /* Animated Gradient Text */
+        .highlight-kinetic {
+            display: block;
+            background: linear-gradient(45deg, #ff00cc, #3333ff, #00ffcc, #ffcc00);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 5s ease infinite;
+        }
+
+        .subtitle {
+            font-size: 20px;
+            line-height: 1.5;
+            opacity: 0.8;
+            max-width: 500px;
+            font-family: var(--font-mono);
+        }
+
+        /* Data Card - The Tech Piece */
+        .data-card {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(100, 100, 255, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Scanning line animation over data card */
+        .data-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 200, 0.8), transparent);
+            animation: scanline 3s linear infinite;
+        }
+
+        .card-title {
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .card-title span.status-blink {
+            color: #00ffcc;
+            animation: blink 1s infinite;
+        }
+
+        .data-payload {
+            font-family: var(--font-mono);
+            font-size: 16px;
+            color: #00ffcc;
+            word-break: break-all;
+            max-height: 300px;
+            overflow-y: auto;
+            text-shadow: 0 0 5px rgba(0, 255, 204, 0.5);
+
+        }
+
+        /* Footer */
+        footer {
+            margin-top: auto;
+            padding-top: 60px;
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            opacity: 0.7;
+            text-transform: uppercase;
+        }
+
+        footer b {
+            color: var(--color-light);
+        }
+
+        /* Animations */
+        @keyframes gradientShift {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.5;
+                box-shadow: 0 0 0px #00ff44;
+            }
+
+            50% {
+                opacity: 1;
+                box-shadow: 0 0 15px #00ff44;
+            }
+
+            100% {
+                opacity: 0.5;
+                box-shadow: 0 0 0px #00ff44;
+            }
+        }
+
+        @keyframes scanline {
+            0% {
+                top: -10%;
+            }
+
+            100% {
+                top: 110%;
+            }
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        @keyframes fadeSlideUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Staggered entrance for content elements */
+        header {
+            animation: fadeSlideUp 0.8s ease-out 0.3s forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .hero-text {
+            animation: fadeSlideUp 0.8s ease-out 0.5s forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .data-card-container {
+            animation: fadeSlideUp 0.8s ease-out 0.7s forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        footer {
+            animation: fadeSlideUp 0.8s ease-out 0.9s forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ambient-background">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="orb orb-4"></div>
+        <div class="noise-overlay"></div>
+    </div>
+
+    <main class="main-glass-panel">
+        <header>
+            <div class="brand">Shardul Negi</div>
+            <div class="badge">Backend · Success</div>
+        </header>
+
+        <div class="content-grid">
+            <section class="hero-text">
+                <h1>
+                    Your data is <br />
+                    <span class="highlight-kinetic">securely persisted.</span>
+                </h1>
+                <p class="subtitle">
+                    The backend processed your request successfully and committed
+                    the payload to durable storage with full integrity guarantees.
+                </p>
+            </section>
+
+            <section class="data-card-container">
+                <div class="data-card">
+                    <div class="card-title">
+                        Stored Payload
+                        <span class="status-blink">Is Active_</span>
+                    </div>
+                    <div class="data-payload">
+                        > BEGIN_PAYLOAD <br>
+                        {{DATA}}
+                        <br>> END_STREAM
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            <div style="margin-bottom: 20px;">
+                View as:
+                <a href="/save?data={{DATA}}&template=default" style="color: #fff; margin-right: 10px;">Default</a>
+                <a href="/save?data={{DATA}}&template=space" style="color: #fff; margin-right: 10px;">Space</a>
+                <a href="/save?data={{DATA}}&template=webgl" style="color: #fff; margin-right: 10px;">WebGL</a>
+                <a href="/save?data={{DATA}}&template=architecture" style="color: #00ff9d;">Architecture</a>
+            </div>
+            <div>
+                Served by <b>Python Backend</b><br />
+                {{TIMESTAMP}}
+            </div>
+            <div>
+                Owned by: <b>{{OWNER}}</b>
+            </div>
+        </footer>
+    </main>
+
+</body>
+
+</html>
