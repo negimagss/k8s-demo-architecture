@@ -31,17 +31,18 @@ data:
     'text/html')\n                self.end_headers()\n                self.wfile.write(content.encode())\n
     \           except Exception as e:\n                self.send_error(500, f\"Error
     loading landing page: {e}\")\n\n        elif parsed_path.path == '/home':\n            #
-    Log the visit!\n            publish_message(\"Visited Home Page\")\n            \n
-    \           # Allow clean rendering of home/index with default data\n            file_path
-    = self.get_template_path(\"index.html\")\n            if os.path.exists(file_path):\n
-    \               with open(file_path, \"r\") as f:\n                    content
-    = f.read()\n                \n                # Replace placeholders\n                content
-    = content.replace(\"{{DATA}}\", \"Home Page\")\n                content = content.replace(\"{{TIMESTAMP}}\",
-    datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\"))\n                content = content.replace(\"{{OWNER}}\",
-    os.environ.get('OWNER_NAME', 'Guest'))\n                \n                self.send_response(200)\n
-    \               self.send_header('Content-type', 'text/html')\n                self.end_headers()\n
-    \               self.wfile.write(content.encode())\n            else:\n                self.send_error(404,
-    \"Home Template Not Found\")\n\n        elif parsed_path.path == '/view':\n            self.send_response(200)\n
+    Log the visit!\n            success = publish_message('Home Page', 'Shardul')\n
+    \           \n            # Allow clean rendering of home/index with default data\n
+    \           file_path = self.get_template_path(\"index.html\")\n            if
+    os.path.exists(file_path):\n                with open(file_path, \"r\") as f:\n
+    \                   content = f.read()\n                \n                # Replace
+    placeholders\n                content = content.replace(\"{{DATA}}\", \"Home Page\")\n
+    \               content = content.replace(\"{{TIMESTAMP}}\", datetime.now().strftime(\"%Y-%m-%d
+    %H:%M:%S\"))\n                content = content.replace(\"{{OWNER}}\", os.environ.get('OWNER_NAME',
+    'Guest'))\n                \n                self.send_response(200)\n                self.send_header('Content-type',
+    'text/html')\n                self.end_headers()\n                self.wfile.write(content.encode())\n
+    \           else:\n                self.send_error(404, \"Home Template Not Found\")\n\n
+    \       elif parsed_path.path == '/view':\n            self.send_response(200)\n
     \           self.send_header('Content-type', 'text/html')\n            self.end_headers()\n
     \           \n            conn = get_db_connection()\n            rows = []\n
     \           health_rows = []\n            if conn:\n                with conn.cursor()

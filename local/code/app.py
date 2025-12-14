@@ -83,7 +83,7 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
 
         elif parsed_path.path == '/home':
             # Log the visit!
-            publish_message("Visited Home Page")
+            success = publish_message('Home Page', 'Shardul')
             
             # Allow clean rendering of home/index with default data
             file_path = self.get_template_path("index.html")
